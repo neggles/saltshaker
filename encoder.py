@@ -1,46 +1,16 @@
 #!/usr/bin/env python3
-import pickle
-import json
 import os
-import torchvision
+import pickle
+
 import torch
-from PIL import Image
-from tqdm import tqdm
-from argparse import ArgumentParser
+import torchvision
 from diffusers import AutoencoderKL
+from PIL import Image
 
 import shared
 from dataloaders.filedisk_loader import AspectBucket
 
 
-# parser = ArgumentParser(description="Stable Diffusion Dataset Encoder")
-# parser.add_argument(
-#     "--model",
-#     type=str,
-#     default=None,
-#     required=True,
-#     help="The name of the model to encode latents with. Could be HuggingFace ID or a directory",
-# )
-# parser.add_argument(
-#     "--config",
-#     type=str,
-#     default="config.json",
-#     help="The json config which holds the BUCKETS struct.",
-# )
-# parser.add_argument(
-#     "--buckets",
-#     type=str,
-#     required=True,
-#     help="The pickle holding aspect bucket information.",
-# )
-# parser.add_argument(
-#     "--hf_token",
-#     type=str,
-#     default=None,
-#     required=False,
-#     help="A HuggingFace token is needed to download private models for training.",
-# )
-# args = parser.parse_args()
 def encode(model, buckets, config, progress):
     device = torch.device("cuda")
 
