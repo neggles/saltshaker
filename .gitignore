@@ -276,6 +276,7 @@ $RECYCLE.BIN/
 /data/
 /buckets.pkl
 /train_config.json
+/train_command.sh
 
 # envrc
 /.envrc

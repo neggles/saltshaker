@@ -1,7 +1,7 @@
 import json
 import os
 import subprocess
-import sys
+from pathlib import Path
 
 import gradio as gr
 
@@ -69,22 +69,25 @@ def execute(
     commandline_arg += f" --partial_dropout={partial_dropout}"
     commandline_arg += f" --shuffle={shuffle}"
     if use_8bit_adam:
-        commandline_arg += f" --use_8bit_adam"
+        commandline_arg += " --use_8bit_adam"
     if use_xformers:
-        commandline_arg += f" --use_xformers"
+        commandline_arg += " --use_xformers"
     if clip_penultimate:
-        commandline_arg += f" --clip_penultimate"
+        commandline_arg += " --clip_penultimate"
     if train_text_encoder:
-        commandline_arg += f" --train_text_encoder"
+        commandline_arg += " --train_text_encoder"
     if gradient_checkpointing:
-        commandline_arg += f" --gradient_checkpointing"
+        commandline_arg += " --gradient_checkpointing"
     if fp16:
-        commandline_arg += f" --fp16"
+        commandline_arg += " --fp16"
     if use_ema:
-        commandline_arg += f" --use_ema"
+        commandline_arg += " --use_ema"
 
     try:
         os.environ["SD_TRAINER_CONFIG_FILE"] = config_path
+        Path(config_path).parent.joinpath("train_command.txt").write_text(
+            "accelerate launch" + commandline_arg
+        )
         subprocess.run("accelerate launch" + commandline_arg, shell=True, check=True, env=os.environ)
     except subprocess.CalledProcessError as e:
         print(f"Command execution failed with return code {e.returncode} and error message: {e.stderr}")
