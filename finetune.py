@@ -847,7 +847,7 @@ class StableDiffusionTrainer:
                         self.save_checkpoint()
 
                     if self.global_step % args.image_log_steps == 0:
-                        if args.sample_prompt == None:
+                        if args.sample_prompt is None:
                             prompt = batch["captions"][random.randint(0, len(batch["captions"]) - 1)]
                             if len(prompt) == 0 and args.uncond_sample_prompt:
                                 prompt = args.uncond_sample_prompt
@@ -959,7 +959,7 @@ def main() -> None:
             import bitsandbytes as bnb
 
             optimizer_cls = bnb.optim.AdamW8bit
-        except:
+        except Exception:
             print("bitsandbytes not supported, using regular Adam optimizer")
             optimizer_cls = torch.optim.AdamW
     else:
