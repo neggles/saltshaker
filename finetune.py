@@ -1,46 +1,49 @@
-import itertools
-import os
 import argparse
-import socket
-import time
-import torch
-import transformers
-import diffusers
-import random
-import tqdm
-import resource
+import copy
+import gc
+import io
+import itertools
+import json
 import math
+import os
+import pickle
+import random
+import resource
+import socket
+import sys
+import time
+
+import accelerate
+import diffusers
+import numpy as np
 import psutil
 import pynvml
-import sys
-import json
-import gc
-import accelerate
-import pickle
-import copy
-import numpy as np
-import io
-from dataloaders.filedisk_loader import AspectBucket, AspectDataset, AspectBucketSampler
+import torch
+import tqdm
+import transformers
+
+from dataloaders.filedisk_loader import AspectBucket, AspectBucketSampler, AspectDataset
 
 try:
     pynvml.nvmlInit()
 except pynvml.nvml.NVMLError_LibraryNotFound:
     pynvml = None
 
-from PIL.PngImagePlugin import PngInfo
 from typing import Iterable, Optional
+
 from diffusers import (
     AutoencoderKL,
-    UNet2DConditionModel,
     DDPMScheduler,
     PNDMScheduler,
     StableDiffusionPipeline,
+    UNet2DConditionModel,
 )
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from diffusers.optimization import get_scheduler
-from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
-from torch.optim.lr_scheduler import LambdaLR
+from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
+from PIL.PngImagePlugin import PngInfo
 from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
+from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 # Latent Scale Factor - https://github.com/huggingface/diffusers/issues/437
 L_SCALE_FACTOR = 0.18215
