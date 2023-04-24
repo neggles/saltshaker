@@ -68,13 +68,9 @@ parser.add_argument(
     help="The path to the pickled data file to use for finetuning.",
 )
 parser.add_argument("--lr", type=float, default=5e-7, help="Learning rate")
-parser.add_argument(
-    "--epochs", type=int, default=10, help="Number of epochs to train for"
-)
+parser.add_argument("--epochs", type=int, default=10, help="Number of epochs to train for")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
-parser.add_argument(
-    "--use_ema", action="store_true", default=False, help="Use EMA for finetuning"
-)
+parser.add_argument("--use_ema", action="store_true", default=False, help="Use EMA for finetuning")
 parser.add_argument(
     "--ucg",
     type=float,
@@ -82,33 +78,26 @@ parser.add_argument(
     help="Percentage chance of dropping out the text condition per batch. Ranges from 0.0 to 1.0 where 1.0 means 100% text condition dropout.",
 )  # 10% dropout probability
 parser.add_argument(
-    "--partial_dropout",
-    type=bool,
-    default=True,
-    help="Enable randomly dropping part of the conditioning"
+    "--partial_dropout", type=bool, default=True, help="Enable randomly dropping part of the conditioning"
 )
 parser.add_argument(
     "--gradient_checkpointing",
     dest="gradient_checkpointing",
-    action="store_true", default=False,
+    action="store_true",
+    default=False,
     help="Enable gradient checkpointing",
 )
 parser.add_argument(
     "--use_8bit_adam",
     dest="use_8bit_adam",
-    action="store_true", default=False,
+    action="store_true",
+    default=False,
     help="Use 8-bit Adam optimizer",
 )
 parser.add_argument("--adam_beta1", type=float, default=0.9, help="Adam beta1")
-parser.add_argument(
-    "--adam_beta2", type=float, default=0.999, help="Adam beta2"
-)
-parser.add_argument(
-    "--adam_weight_decay", type=float, default=1e-2, help="Adam weight decay"
-)
-parser.add_argument(
-    "--adam_epsilon", type=float, default=1e-08, help="Adam epsilon"
-)
+parser.add_argument("--adam_beta2", type=float, default=0.999, help="Adam beta2")
+parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Adam weight decay")
+parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Adam epsilon")
 parser.add_argument(
     "--seed",
     type=int,
@@ -141,9 +130,7 @@ parser.add_argument(
     help="Shuffle dataset",
 )
 parser.add_argument(
-    "--reshuffle_tags",
-    action="store_true",
-    help="reshuffle tags after dropping out from the end."
+    "--reshuffle_tags", action="store_true", help="reshuffle tags after dropping out from the end."
 )
 parser.add_argument(
     "--hf_token",
@@ -155,7 +142,8 @@ parser.add_argument(
 parser.add_argument(
     "--fp16",
     dest="fp16",
-    action="store_true", default=False,
+    action="store_true",
+    default=False,
     help="Train in mixed precision",
 )
 parser.add_argument(
@@ -186,11 +174,11 @@ parser.add_argument(
         ' "constant", "constant_with_warmup"]'
     ),
 )
+parser.add_argument("--sample_prompt", default=None, help="prompt to use when generating samples")
 parser.add_argument(
-    "--sample_prompt", default=None, help="prompt to use when generating samples"
-)
-parser.add_argument(
-    "--uncond_sample_prompt", default=None, help="prompt to use when generating samples after a batch that used UCG"
+    "--uncond_sample_prompt",
+    default=None,
+    help="prompt to use when generating samples after a batch that used UCG",
 )
 parser.add_argument(
     "--lr_warmup_steps", type=int, default=0, help="Number of steps for the warmup in the lr scheduler."
@@ -199,21 +187,43 @@ parser.add_argument(
     "--lr_num_cycles", type=int, default=1, help="Number of cycles for cosine_with_restarts lr scheduler."
 )
 parser.add_argument(
-    "--lr_min_scale", type=float, default=0.0, help="Minimum scaling factor for cosine_with_restarts lr scheduler."
+    "--lr_min_scale",
+    type=float,
+    default=0.0,
+    help="Minimum scaling factor for cosine_with_restarts lr scheduler.",
 )
 parser.add_argument(
-    "--lr_max_scale", type=float, default=1.0, help="Maximum scaling factor for cosine_with_restarts lr scheduler."
+    "--lr_max_scale",
+    type=float,
+    default=1.0,
+    help="Maximum scaling factor for cosine_with_restarts lr scheduler.",
 )
-parser.add_argument('--use_xformers', action="store_true", default=False, help='Use memory efficient attention')
+parser.add_argument(
+    "--use_xformers", action="store_true", default=False, help="Use memory efficient attention"
+)
 parser.add_argument("--train_text_encoder", action="store_true", help="Whether to train the text encoder")
-parser.add_argument("--text_encoder_learning_rate", type=float, default=7e-9, help="Learning rate for the text encoder")
-parser.add_argument('--extended_mode_chunks', type=int, default=0,
-                    help='Enables extended mode for tokenization with given amount of maximum chunks. Values < 2 disable.')
-parser.add_argument('--clip_penultimate', action="store_true", default=False,
-                    help='Use penultimate CLIP layer for text embedding')
-parser.add_argument('--log_loss_ema', action="store_true", default=False, help='Smooth logged loss using EMA')
-parser.add_argument('--chunked_tag_shuffle', type=int, default=0,
-                    help='shuffle the first n tags within the first n tags, and shuffle the trailing tags with each other.')
+parser.add_argument(
+    "--text_encoder_learning_rate", type=float, default=7e-9, help="Learning rate for the text encoder"
+)
+parser.add_argument(
+    "--extended_mode_chunks",
+    type=int,
+    default=0,
+    help="Enables extended mode for tokenization with given amount of maximum chunks. Values < 2 disable.",
+)
+parser.add_argument(
+    "--clip_penultimate",
+    action="store_true",
+    default=False,
+    help="Use penultimate CLIP layer for text embedding",
+)
+parser.add_argument("--log_loss_ema", action="store_true", default=False, help="Smooth logged loss using EMA")
+parser.add_argument(
+    "--chunked_tag_shuffle",
+    type=int,
+    default=0,
+    help="shuffle the first n tags within the first n tags, and shuffle the trailing tags with each other.",
+)
 args = parser.parse_args()
 
 
@@ -232,10 +242,7 @@ def get_gpu_ram() -> str:
         gpu_total = int(gpu_info.total / 1e6)
         gpu_free = int(gpu_info.free / 1e6)
         gpu_used = int(gpu_info.used / 1e6)
-        gpu_str = (
-            f"GPU: (U: {gpu_used:,}mb F: {gpu_free:,}mb "
-            f"T: {gpu_total:,}mb) "
-        )
+        gpu_str = f"GPU: (U: {gpu_used:,}mb F: {gpu_free:,}mb " f"T: {gpu_total:,}mb) "
         torch_reserved_gpu = int(torch.cuda.memory.memory_reserved() / 1e6)
         torch_reserved_max = int(torch.cuda.memory.max_memory_reserved() / 1e6)
         torch_used_gpu = int(torch.cuda.memory_allocated() / 1e6)
@@ -253,11 +260,7 @@ def get_gpu_ram() -> str:
     )
     cpu_vmem = psutil.virtual_memory()
     cpu_free = int(cpu_vmem.free / 1e6)
-    return (
-        f"CPU: (max_rss: {cpu_max_rss:,}mb F: {cpu_free:,}mb) "
-        f"{gpu_str}"
-        f"{torch_str}"
-    )
+    return f"CPU: (max_rss: {cpu_max_rss:,}mb F: {cpu_free:,}mb) " f"{gpu_str}" f"{torch_str}"
 
 
 # Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
@@ -309,10 +312,7 @@ class EMAModel:
         for s_param, param in zip(self.shadow_params, parameters):
             param.data.copy_(s_param.data)
 
-    def store(
-            self,
-            parameters: Optional[Iterable[torch.nn.Parameter]] = None
-    ) -> None:
+    def store(self, parameters: Optional[Iterable[torch.nn.Parameter]] = None) -> None:
         """
         Save the current parameters for restoring later.
         Args:
@@ -322,10 +322,7 @@ class EMAModel:
         """
         self.collected_params = [param.clone() for param in parameters]
 
-    def restore(
-            self,
-            parameters: Optional[Iterable[torch.nn.Parameter]] = None
-    ) -> None:
+    def restore(self, parameters: Optional[Iterable[torch.nn.Parameter]] = None) -> None:
         """
         Restore the parameters stored with the `store` method.
         Useful to validate the model with EMA parameters without affecting the
@@ -351,28 +348,26 @@ class EMAModel:
         """
         # .to() on the tensors handles None correctly
         self.shadow_params = [
-            p.to(device=device, dtype=dtype)
-            if p.is_floating_point()
-            else p.to(device=device)
+            p.to(device=device, dtype=dtype) if p.is_floating_point() else p.to(device=device)
             for p in self.shadow_params
         ]
 
 
 class StableDiffusionTrainer:
     def __init__(
-            self,
-            accelerator: accelerate.Accelerator,
-            vae: AutoencoderKL,
-            unet: UNet2DConditionModel,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            ema: EMAModel,
-            train_dataloader: torch.utils.data.DataLoader,
-            noise_scheduler: DDPMScheduler,
-            lr_scheduler: torch.optim.lr_scheduler.LambdaLR,
-            optimizer: torch.optim.Optimizer,
-            weight_dtype: torch.dtype,
-            args: argparse.Namespace,
+        self,
+        accelerator: accelerate.Accelerator,
+        vae: AutoencoderKL,
+        unet: UNet2DConditionModel,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        ema: EMAModel,
+        train_dataloader: torch.utils.data.DataLoader,
+        noise_scheduler: DDPMScheduler,
+        lr_scheduler: torch.optim.lr_scheduler.LambdaLR,
+        optimizer: torch.optim.Optimizer,
+        weight_dtype: torch.dtype,
+        args: argparse.Namespace,
     ):
         self.accelerator = accelerator
         self.vae = vae
@@ -393,7 +388,7 @@ class StableDiffusionTrainer:
                 desc="Total Steps",
                 leave=False,
                 dynamic_ncols=True,
-                smoothing=min(.3, 20.0 / len(self.train_dataloader))
+                smoothing=min(0.3, 20.0 / len(self.train_dataloader)),
             )
 
         class Logger:
@@ -404,7 +399,9 @@ class StableDiffusionTrainer:
             def log(self, data, step=None):
                 index = 0
                 if "images" in data.keys():
-                    os.makedirs(os.path.join(self.filepath, args.run_name, 'images', f"step_{step}"), exist_ok=True)
+                    os.makedirs(
+                        os.path.join(self.filepath, args.run_name, "images", f"step_{step}"), exist_ok=True
+                    )
                     for image, caption in data["images"]:
                         metadata = PngInfo()
                         metadata.add_text("SD_TRAINING_RUN", args.run_name)
@@ -412,13 +409,17 @@ class StableDiffusionTrainer:
                         metadata.add_text("SD_STEP_NUMBER", str(step))
 
                         image.save(
-                            os.path.join(self.filepath, args.run_name, 'images', f"step_{step}", f"sample_{index}.png"),
-                            "PNG", pnginfo=metadata)
+                            os.path.join(
+                                self.filepath, args.run_name, "images", f"step_{step}", f"sample_{index}.png"
+                            ),
+                            "PNG",
+                            pnginfo=metadata,
+                        )
                         index += 1
                 else:
                     self.file.write(f"[step {step}]: " if step else "[log]: ")
                     self.file.write(json.dumps(data))
-                    self.file.write('\n')
+                    self.file.write("\n")
                     self.file.flush()
 
             def close(self):
@@ -448,14 +449,13 @@ class StableDiffusionTrainer:
             safety_checker=StableDiffusionSafetyChecker.from_pretrained(
                 "CompVis/stable-diffusion-safety-checker"
             ),
-            feature_extractor=CLIPFeatureExtractor.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            ),
+            feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
         )
-        print(f'Saving model (step: {self.global_step})...')
+        print(f"Saving model (step: {self.global_step})...")
         pipeline.save_pretrained(
-            os.path.join(args.output_path, args.run_name, "checkpoints", 'step_' + str(self.global_step)),
-            safe_serialization=True)
+            os.path.join(args.output_path, args.run_name, "checkpoints", "step_" + str(self.global_step)),
+            safe_serialization=True,
+        )
         if args.use_ema:
             self.ema.restore(unet.parameters())
         del pipeline
@@ -480,9 +480,7 @@ class StableDiffusionTrainer:
                 subfolder="scheduler",
             ),
             safety_checker=fake_safety_checker,  # don't load the real safety checker to save memory
-            feature_extractor=CLIPFeatureExtractor.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            ),
+            feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
         ).to(self.accelerator.device)
         # inference
         with torch.no_grad():
@@ -499,110 +497,208 @@ class StableDiffusionTrainer:
         # id rather die than refactor this code
         if args.extended_mode_chunks < 2:
             max_length = self.tokenizer.model_max_length - 2
-            input_ids = [self.tokenizer([example], truncation=True, return_length=True, return_overflowing_tokens=False,
-                                        padding=False, add_special_tokens=False, max_length=max_length).input_ids for
-                         example in captions if example is not None]
+            input_ids = [
+                self.tokenizer(
+                    [example],
+                    truncation=True,
+                    return_length=True,
+                    return_overflowing_tokens=False,
+                    padding=False,
+                    add_special_tokens=False,
+                    max_length=max_length,
+                ).input_ids
+                for example in captions
+                if example is not None
+            ]
         else:
             max_length = self.tokenizer.model_max_length
             max_chunks = args.extended_mode_chunks
-            input_ids = [self.tokenizer([example], truncation=True, return_length=True, return_overflowing_tokens=False,
-                                        padding=False, add_special_tokens=False,
-                                        max_length=(max_length * max_chunks) - (max_chunks * 2)).input_ids[0] for
-                         example in captions if example is not None]
+            input_ids = [
+                self.tokenizer(
+                    [example],
+                    truncation=True,
+                    return_length=True,
+                    return_overflowing_tokens=False,
+                    padding=False,
+                    add_special_tokens=False,
+                    max_length=(max_length * max_chunks) - (max_chunks * 2),
+                ).input_ids[0]
+                for example in captions
+                if example is not None
+            ]
 
-        text_encoder = self.text_encoder if not args.train_text_encoder else self.accelerator.unwrap_model(
-            self.text_encoder)
+        text_encoder = (
+            self.text_encoder
+            if not args.train_text_encoder
+            else self.accelerator.unwrap_model(self.text_encoder)
+        )
 
         if args.extended_mode_chunks < 2:
             attn = copy.deepcopy(input_ids)
             for i, x in enumerate(input_ids):
                 for j, y in enumerate(x):
-                    input_ids[i][j] = [self.tokenizer.bos_token_id, *y,
-                                       *np.full((min(self.tokenizer.model_max_length - len(y) - 1, 1)),
-                                                self.tokenizer.eos_token_id),
-                                       *np.full((max(self.tokenizer.model_max_length - len(y) - 2, 0)),
-                                                self.tokenizer.pad_token_id)]
-                    attn[i][j] = [*np.full(len(y) + 2, 1), *np.full(self.tokenizer.model_max_length - len(y) - 2, 0)]
+                    input_ids[i][j] = [
+                        self.tokenizer.bos_token_id,
+                        *y,
+                        *np.full(
+                            (min(self.tokenizer.model_max_length - len(y) - 1, 1)),
+                            self.tokenizer.eos_token_id,
+                        ),
+                        *np.full(
+                            (max(self.tokenizer.model_max_length - len(y) - 2, 0)),
+                            self.tokenizer.pad_token_id,
+                        ),
+                    ]
+                    attn[i][j] = [
+                        *np.full(len(y) + 2, 1),
+                        *np.full(self.tokenizer.model_max_length - len(y) - 2, 0),
+                    ]
 
             if args.clip_penultimate:
-                input_ids = [text_encoder.text_model.final_layer_norm(
-                    text_encoder(torch.asarray(input_id).to(self.accelerator.device), output_hidden_states=True,
-                                 attention_mask=torch.asarray(attn).to(self.accelerator.device))['hidden_states'][-2])[
-                                 0] for (input_id, attn) in zip(input_ids, attn)]
+                input_ids = [
+                    text_encoder.text_model.final_layer_norm(
+                        text_encoder(
+                            torch.asarray(input_id).to(self.accelerator.device),
+                            output_hidden_states=True,
+                            attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                        )["hidden_states"][-2]
+                    )[0]
+                    for (input_id, attn) in zip(input_ids, attn)
+                ]
             else:
                 input_ids = [
-                    text_encoder(torch.asarray(input_id).to(self.accelerator.device), output_hidden_states=True,
-                                 attention_mask=torch.asarray(attn).to(self.accelerator.device)).last_hidden_state[0]
-                    for (input_id, attn) in zip(input_ids, attn)]
+                    text_encoder(
+                        torch.asarray(input_id).to(self.accelerator.device),
+                        output_hidden_states=True,
+                        attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                    ).last_hidden_state[0]
+                    for (input_id, attn) in zip(input_ids, attn)
+                ]
         else:
             max_standard_tokens = max_length - 2
             max_chunks = args.extended_mode_chunks
-            max_len = np.ceil(max(len(x) for x in input_ids) / max_standard_tokens).astype(
-                int).item() * max_standard_tokens
+            max_len = (
+                np.ceil(max(len(x) for x in input_ids) / max_standard_tokens).astype(int).item()
+                * max_standard_tokens
+            )
             if max_len > max_standard_tokens:
                 z = None
                 for i, x in enumerate(input_ids):
                     if len(x) < max_len:
-                        input_ids[i] = [*x, *np.full(min(max_len - len(x), 1), self.tokenizer.eos_token_id),
-                                        *np.full(max(max_len - len(x) - 1, 0), self.tokenizer.pad_token_id)]
+                        input_ids[i] = [
+                            *x,
+                            *np.full(min(max_len - len(x), 1), self.tokenizer.eos_token_id),
+                            *np.full(max(max_len - len(x) - 1, 0), self.tokenizer.pad_token_id),
+                        ]
                 batch_t = torch.tensor(input_ids)
-                chunks = [batch_t[:, i:i + max_standard_tokens] for i in range(0, max_len, max_standard_tokens)]
+                chunks = [
+                    batch_t[:, i : i + max_standard_tokens] for i in range(0, max_len, max_standard_tokens)
+                ]
                 for chunk in chunks:
-                    chunk = torch.cat((torch.full((chunk.shape[0], 1), self.tokenizer.bos_token_id), chunk,
-                                       torch.full((chunk.shape[0], 1), self.tokenizer.pad_token_id)), 1)
+                    chunk = torch.cat(
+                        (
+                            torch.full((chunk.shape[0], 1), self.tokenizer.bos_token_id),
+                            chunk,
+                            torch.full((chunk.shape[0], 1), self.tokenizer.pad_token_id),
+                        ),
+                        1,
+                    )
                     attn = torch.asarray(
                         [
-                            list(map(lambda x: 0 if x.detach().item() == self.tokenizer.pad_token_id else 1,
-                                     [x for x in sc]))
+                            list(
+                                map(
+                                    lambda x: 0 if x.detach().item() == self.tokenizer.pad_token_id else 1,
+                                    [x for x in sc],
+                                )
+                            )
                             for sc in chunk
                         ]
                     )
                     if z is None:
                         if args.clip_penultimate:
                             z = text_encoder.text_model.final_layer_norm(
-                                text_encoder(chunk.to(self.accelerator.device), output_hidden_states=True,
-                                             attention_mask=torch.asarray(attn).to(self.accelerator.device))[
-                                    'hidden_states'][-2])
+                                text_encoder(
+                                    chunk.to(self.accelerator.device),
+                                    output_hidden_states=True,
+                                    attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                                )["hidden_states"][-2]
+                            )
                         else:
-                            z = text_encoder(chunk.to(self.accelerator.device), output_hidden_states=True,
-                                             attention_mask=torch.asarray(attn).to(
-                                                 self.accelerator.device)).last_hidden_state
+                            z = text_encoder(
+                                chunk.to(self.accelerator.device),
+                                output_hidden_states=True,
+                                attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                            ).last_hidden_state
                     else:
                         if args.clip_penultimate:
-                            z = torch.cat((z, text_encoder.text_model.final_layer_norm(
-                                text_encoder(chunk.to(self.accelerator.device), output_hidden_states=True,
-                                             attention_mask=torch.asarray(attn).to(self.accelerator.device))[
-                                    'hidden_states'][-2])), dim=-2)
+                            z = torch.cat(
+                                (
+                                    z,
+                                    text_encoder.text_model.final_layer_norm(
+                                        text_encoder(
+                                            chunk.to(self.accelerator.device),
+                                            output_hidden_states=True,
+                                            attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                                        )["hidden_states"][-2]
+                                    ),
+                                ),
+                                dim=-2,
+                            )
                         else:
-                            z = torch.cat((z, text_encoder(chunk.to(self.accelerator.device), output_hidden_states=True,
-                                                           attention_mask=torch.asarray(attn).to(
-                                                               self.accelerator.device)).last_hidden_state), dim=-2)
+                            z = torch.cat(
+                                (
+                                    z,
+                                    text_encoder(
+                                        chunk.to(self.accelerator.device),
+                                        output_hidden_states=True,
+                                        attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                                    ).last_hidden_state,
+                                ),
+                                dim=-2,
+                            )
                 input_ids = z
             else:
                 attn = copy.deepcopy(input_ids)
                 for i, x in enumerate(input_ids):
-                    input_ids[i] = [self.tokenizer.bos_token_id, *x,
-                                    *np.full((min(self.tokenizer.model_max_length - len(x) - 1, 1)),
-                                             self.tokenizer.eos_token_id),
-                                    *np.full((max(self.tokenizer.model_max_length - len(x) - 2, 0)),
-                                             self.tokenizer.pad_token_id)]
-                    attn[i] = [*np.full(len(x) + 2, 1), *np.full(self.tokenizer.model_max_length - len(x) - 2, 0)]
+                    input_ids[i] = [
+                        self.tokenizer.bos_token_id,
+                        *x,
+                        *np.full(
+                            (min(self.tokenizer.model_max_length - len(x) - 1, 1)),
+                            self.tokenizer.eos_token_id,
+                        ),
+                        *np.full(
+                            (max(self.tokenizer.model_max_length - len(x) - 2, 0)),
+                            self.tokenizer.pad_token_id,
+                        ),
+                    ]
+                    attn[i] = [
+                        *np.full(len(x) + 2, 1),
+                        *np.full(self.tokenizer.model_max_length - len(x) - 2, 0),
+                    ]
                 if args.clip_penultimate:
                     input_ids = text_encoder.text_model.final_layer_norm(
-                        text_encoder(torch.asarray(input_ids).to(self.accelerator.device), output_hidden_states=True,
-                                     attention_mask=torch.asarray(attn).to(self.accelerator.device))['hidden_states'][
-                            -2])
+                        text_encoder(
+                            torch.asarray(input_ids).to(self.accelerator.device),
+                            output_hidden_states=True,
+                            attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                        )["hidden_states"][-2]
+                    )
                 else:
-                    input_ids = text_encoder(torch.asarray(input_ids).to(self.accelerator.device),
-                                             output_hidden_states=True, attention_mask=torch.asarray(attn).to(
-                            self.accelerator.device)).last_hidden_state
+                    input_ids = text_encoder(
+                        torch.asarray(input_ids).to(self.accelerator.device),
+                        output_hidden_states=True,
+                        attention_mask=torch.asarray(attn).to(self.accelerator.device),
+                    ).last_hidden_state
         return torch.stack(tuple(input_ids))
 
     def backprop(self, loss):
         self.accelerator.backward(loss)
         if self.accelerator.sync_gradients:
             if args.train_text_encoder:
-                self.accelerator.clip_grad_norm_(itertools.chain(self.unet.parameters(), self.text_encoder.parameters()), .7071)
+                self.accelerator.clip_grad_norm_(
+                    itertools.chain(self.unet.parameters(), self.text_encoder.parameters()), 0.7071
+                )
             else:
                 self.accelerator.clip_grad_norm_(self.unet.parameters(), 1.0)
         self.optimizer.step()
@@ -624,15 +720,14 @@ class StableDiffusionTrainer:
         for idx, l in enumerate(latents):
             if l.size() != latents[largest_latent].size():
                 print(
-                    f'ERROR: Uneven latent size found at step {self.global_step} ({l.size()} -> {latents[largest_latent].size()})! Replacing...'
+                    f"ERROR: Uneven latent size found at step {self.global_step} ({l.size()} -> {latents[largest_latent].size()})! Replacing..."
                 )
 
                 latents[idx] = latents[largest_latent].clone()
                 batch["captions"][idx] = batch["captions"][largest_latent]
 
         # Finally stack our latents of the same guaranteed size
-        latents = torch.stack(latents).to(
-            self.accelerator.device, dtype=torch.float32)
+        latents = torch.stack(latents).to(self.accelerator.device, dtype=torch.float32)
 
         # Sample noise
         noise = torch.randn_like(latents)
@@ -648,9 +743,7 @@ class StableDiffusionTrainer:
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
-        noisy_latents = self.noise_scheduler.add_noise(
-            latents, noise, timesteps
-        )
+        noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
         # Encode captions with respect to extended mode and penultimate options
         encoder_hidden_states = self.encode(batch["captions"])
@@ -662,17 +755,11 @@ class StableDiffusionTrainer:
         if self.noise_scheduler.config.prediction_type == "epsilon":
             target = noise
         elif self.noise_scheduler.config.prediction_type == "v_prediction":
-            target = self.noise_scheduler.get_velocity(
-                latents, noise, timesteps
-            )
+            target = self.noise_scheduler.get_velocity(latents, noise, timesteps)
         else:
-            raise ValueError(
-                f"Invalid prediction type: {self.noise_scheduler.config.prediction_type}"
-            )
+            raise ValueError(f"Invalid prediction type: {self.noise_scheduler.config.prediction_type}")
 
-        loss = torch.nn.functional.mse_loss(
-            noise_pred.float(), target.float(), reduction="mean"
-        )
+        loss = torch.nn.functional.mse_loss(noise_pred.float(), target.float(), reduction="mean")
 
         self.backprop(loss)
 
@@ -718,31 +805,29 @@ class StableDiffusionTrainer:
                 self.global_step += 1
 
                 if self.accelerator.is_main_process:
-                    rank_samples_per_second = args.batch_size * (
-                            1 / (time.perf_counter() - step_start)
-                    )
-                    world_samples_per_second = (
-                            rank_samples_per_second * self.accelerator.num_processes
-                    )
+                    rank_samples_per_second = args.batch_size * (1 / (time.perf_counter() - step_start))
+                    world_samples_per_second = rank_samples_per_second * self.accelerator.num_processes
                     logs.update(
                         {
                             "perf/rank_sps": rank_samples_per_second,
                             "perf/world_sps": world_samples_per_second,
                             "train/epoch": epoch,
                             "train/step": self.global_step,
-                            "train/samples_seen": self.global_step * self.accelerator.num_processes * args.batch_size,
+                            "train/samples_seen": self.global_step
+                            * self.accelerator.num_processes
+                            * args.batch_size,
                         }
                     )
                     # smooth loss over 5% of an epoch
 
-                    ema_loss = self.logs['train/loss'] * (1 - ema_loss_decay) + logs['train/loss'] * ema_loss_decay
-                    self.logs.update(
-                        logs
+                    ema_loss = (
+                        self.logs["train/loss"] * (1 - ema_loss_decay) + logs["train/loss"] * ema_loss_decay
                     )
-                    self.logs['train/loss'] = ema_loss
+                    self.logs.update(logs)
+                    self.logs["train/loss"] = ema_loss
 
                     # Output GPU RAM to flush tqdm
-                    if not hasattr(self, 'report_idx'):
+                    if not hasattr(self, "report_idx"):
                         self.report_idx = 1
                     else:
                         self.report_idx += 1
@@ -761,7 +846,7 @@ class StableDiffusionTrainer:
                     if self.global_step % args.image_log_steps == 0:
                         if args.sample_prompt == None:
                             prompt = batch["captions"][random.randint(0, len(batch["captions"]) - 1)]
-                            if (len(prompt) == 0 and args.uncond_sample_prompt):
+                            if len(prompt) == 0 and args.uncond_sample_prompt:
                                 prompt = args.uncond_sample_prompt
                         else:
                             prompt = args.sample_prompt
@@ -777,22 +862,31 @@ class StableDiffusionTrainer:
 
 
 def get_cosine_with_hard_restarts_schedule_with_warmup_and_scaling(
-        optimizer: Optimizer,
-        num_warmup_steps: int,
-        num_training_steps: int,
-        num_cycles: float = 1,
-        last_epoch: int = -1,
-        max_scale: float = 1.0,
-        min_scale: float = 0.0
+    optimizer: Optimizer,
+    num_warmup_steps: int,
+    num_training_steps: int,
+    num_cycles: float = 1,
+    last_epoch: int = -1,
+    max_scale: float = 1.0,
+    min_scale: float = 0.0,
 ):
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
             return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(
+            max(1, num_training_steps - num_warmup_steps)
+        )
         if progress >= 1.0:
             return 0.0
-        return max(0.0, 0.5 * (max_scale + min_scale + (max_scale - min_scale) * math.cos(
-            math.pi * ((float(num_cycles) * progress) % 1.0))))
+        return max(
+            0.0,
+            0.5
+            * (
+                max_scale
+                + min_scale
+                + (max_scale - min_scale) * math.cos(math.pi * ((float(num_cycles) * progress) % 1.0))
+            ),
+        )
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
 
@@ -802,9 +896,7 @@ def main() -> None:
         try:
             args.hf_token = os.environ["HF_API_TOKEN"]
         except KeyError:
-            print(
-                "Please set HF_API_TOKEN environment variable or pass --hf_token"
-            )
+            print("Please set HF_API_TOKEN environment variable or pass --hf_token")
             exit(1)
     else:
         print(
@@ -813,9 +905,7 @@ def main() -> None:
 
     # get device
     accelerator = accelerate.Accelerator(
-        gradient_accumulation_steps=1,
-        mixed_precision="fp16" if args.fp16 else "no",
-        even_batches=False
+        gradient_accumulation_steps=1, mixed_precision="fp16" if args.fp16 else "no", even_batches=False
     )
 
     # Set seed
@@ -834,25 +924,17 @@ def main() -> None:
         print("FP16:", args.fp16)
         print("RANDOM SEED:", args.seed)
 
-    tokenizer = CLIPTokenizer.from_pretrained(
-        args.model, subfolder="tokenizer", use_auth_token=args.hf_token
-    )
+    tokenizer = CLIPTokenizer.from_pretrained(args.model, subfolder="tokenizer", use_auth_token=args.hf_token)
     text_encoder = CLIPTextModel.from_pretrained(
         args.model, subfolder="text_encoder", use_auth_token=args.hf_token
     )
     if args.vae is None:
-        vae = AutoencoderKL.from_pretrained(
-            args.model, subfolder="vae", use_auth_token=args.hf_token
-        )
+        vae = AutoencoderKL.from_pretrained(args.model, subfolder="vae", use_auth_token=args.hf_token)
     else:
-        vae = AutoencoderKL.from_pretrained(
-            args.vae, use_auth_token=args.hf_token
-        )
+        vae = AutoencoderKL.from_pretrained(args.vae, use_auth_token=args.hf_token)
         if accelerator.is_main_process:
-            print('VAE:', args.vae)
-    unet = UNet2DConditionModel.from_pretrained(
-        args.model, subfolder="unet", use_auth_token=args.hf_token
-    )
+            print("VAE:", args.vae)
+    unet = UNet2DConditionModel.from_pretrained(args.model, subfolder="unet", use_auth_token=args.hf_token)
 
     # Freeze vae and (maybe) text_encoder
     vae.requires_grad_(False)
@@ -868,7 +950,7 @@ def main() -> None:
         unet.set_use_memory_efficient_attention_xformers(True)
 
     if (
-            args.use_8bit_adam
+        args.use_8bit_adam
     ):  # Bits and bytes is only supported on certain CUDA setups, so default to regular adam if it fails.
         try:
             import bitsandbytes as bnb
@@ -881,9 +963,11 @@ def main() -> None:
         optimizer_cls = torch.optim.AdamW
 
     optimizer = optimizer_cls(
-        unet.parameters() if not args.train_text_encoder else [
+        unet.parameters()
+        if not args.train_text_encoder
+        else [
             {"params": unet.parameters()},
-            {"params": text_encoder.parameters(), "lr": args.text_encoder_learning_rate}
+            {"params": text_encoder.parameters(), "lr": args.text_encoder_learning_rate},
         ],
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
@@ -903,8 +987,8 @@ def main() -> None:
                 random.shuffle(copy_data)
                 return copy_data
             else:
-                d_head = data[:args.chunked_tag_shuffle]
-                d_tail = data[args.chunked_tag_shuffle:]
+                d_head = data[: args.chunked_tag_shuffle]
+                d_tail = data[args.chunked_tag_shuffle :]
                 random.shuffle(d_head)
                 random.shuffle(d_tail)
                 return d_head + d_tail
@@ -917,25 +1001,25 @@ def main() -> None:
                 # to keep a random percent of the data, where the random number is the x-axis
                 x = random.randint(0, 100)
                 if x >= 50:
-                    return ', '.join(reshuffle(data))
+                    return ", ".join(reshuffle(data))
                 else:
-                    return ', '.join(reshuffle(data[:len(data) * x * 2 // 100]))
-            return ', '.join(reshuffle(data))
+                    return ", ".join(reshuffle(data[: len(data) * x * 2 // 100]))
+            return ", ".join(reshuffle(data))
         else:
             # drop for unconditional guidance
-            return ''
+            return ""
 
     def collate_fn(examples):
         return_dict = {
             "latents": [example[0] for example in examples],
             "captions": [drop_random(example[1]) for example in examples],
             "source_name": [example[2] for example in examples],
-            "source_id": [example[3] for example in examples]
+            "source_id": [example[3] for example in examples],
         }
 
         return return_dict
 
-    with open(args.dataset, 'rb') as f:
+    with open(args.dataset, "rb") as f:
         bucket: AspectBucket = pickle.load(f)
 
     dataset = AspectDataset(bucket)
@@ -952,13 +1036,10 @@ def main() -> None:
     # prefetch_factor is 2 by default ->
     # 2 * num_workers batches will prefetch
     train_dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_sampler=sampler,
-        num_workers=10,
-        collate_fn=collate_fn
+        dataset, batch_sampler=sampler, num_workers=10, collate_fn=collate_fn
     )
 
-    if args.lr_scheduler == 'cosine_with_restarts':
+    if args.lr_scheduler == "cosine_with_restarts":
         print("lr scheduler = cosine with restarts")
         lr_scheduler = get_cosine_with_hard_restarts_schedule_with_warmup_and_scaling(
             optimizer=optimizer,
@@ -966,7 +1047,7 @@ def main() -> None:
             num_training_steps=args.epochs * len(train_dataloader),
             num_cycles=args.lr_num_cycles,
             max_scale=args.lr_max_scale,
-            min_scale=args.lr_min_scale
+            min_scale=args.lr_min_scale,
         )
     else:
         print(f"lr scheduler = {args.lr_scheduler}")
@@ -974,7 +1055,7 @@ def main() -> None:
             args.lr_scheduler,
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps,
-            num_training_steps=args.epochs * len(train_dataloader)
+            num_training_steps=args.epochs * len(train_dataloader),
         )
 
     if not args.train_text_encoder:
@@ -991,9 +1072,7 @@ def main() -> None:
     # move models to device
     vae = vae.to(accelerator.device, dtype=weight_dtype)
     if not args.train_text_encoder:
-        text_encoder = text_encoder.to(
-            accelerator.device, dtype=weight_dtype
-        )
+        text_encoder = text_encoder.to(accelerator.device, dtype=weight_dtype)
     else:
         text_encoder = text_encoder.to(accelerator.device)
 

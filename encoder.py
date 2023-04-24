@@ -42,28 +42,28 @@ from dataloaders.filedisk_loader import AspectBucket
 # )
 # args = parser.parse_args()
 def encode(model, buckets, config, progress):
-    device = torch.device('cuda')
+    device = torch.device("cuda")
 
     all_files = [os.path.join(config["DATA_PATH"], filename) for filename in os.listdir(config["DATA_PATH"])]
-    all_image_files = [instance for instance in all_files if
-                       instance.endswith(".png") or instance.endswith(".jpg") or instance.endswith(".webp")]
+    all_image_files = [
+        instance
+        for instance in all_files
+        if instance.endswith(".png") or instance.endswith(".jpg") or instance.endswith(".webp")
+    ]
 
-    with open(buckets, 'rb') as f:
+    with open(buckets, "rb") as f:
         bucket: AspectBucket = pickle.load(f)
 
-    vae = AutoencoderKL.from_pretrained(
-        model, subfolder="vae"
-    )
+    vae = AutoencoderKL.from_pretrained(model, subfolder="vae")
 
     vae.requires_grad_(False)
     vae = vae.to(device, dtype=torch.float32)
 
     def vae_encode(image_filepath, latent_filepath, aspect_ratio):
-        image = Image.open(image_filepath).convert('RGB')
-        transforms = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize([0.5], [0.5])
-        ])
+        image = Image.open(image_filepath).convert("RGB")
+        transforms = torchvision.transforms.Compose(
+            [torchvision.transforms.ToTensor(), torchvision.transforms.Normalize([0.5], [0.5])]
+        )
 
         image = image.resize(aspect_ratio, resample=Image.Resampling.LANCZOS)
         # transform image to tensor
@@ -89,7 +89,7 @@ def encode(model, buckets, config, progress):
             image_file_name = None
             latent_name = os.path.join(config["DATA_PATH"], image_id + ".latent")
             for ext in shared.VALID_IMAGE_EXTENSIONS:
-                image_file_name = os.path.join(config["DATA_PATH"], image_id + '.' + ext)
+                image_file_name = os.path.join(config["DATA_PATH"], image_id + "." + ext)
                 if os.path.isfile(image_file_name):
                     break
             else:

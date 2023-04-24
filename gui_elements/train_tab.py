@@ -6,85 +6,86 @@ import sys
 import gradio as gr
 
 
-def execute(model_path,
-            config_path,
-            bucket_path,
-            output_path,
-            clip_penultimate,
-            run_name,
-            fp16,
-            use_xformers,
-            extended_mode_chunks,
-            epochs,
-            batch_size,
-            train_text_encoder,
-            unet_lr,
-            text_encoder_lr,
-            lr_scheduler,
-            lr_warmup_steps,
-            lr_num_cycles,
-            lr_min_scale,
-            lr_max_scale,
-            gradient_checkpointing,
-            use_ema,
-            use_8bit_adam,
-            adam_beta1,
-            adam_beta2,
-            adam_weight_decay,
-            adam_epsilon,
-            shuffle,
-            seed,
-            ucg,
-            partial_dropout,
-            image_log_steps,
-            image_log_amount,
-            save_every
-            ):
+def execute(
+    model_path,
+    config_path,
+    bucket_path,
+    output_path,
+    clip_penultimate,
+    run_name,
+    fp16,
+    use_xformers,
+    extended_mode_chunks,
+    epochs,
+    batch_size,
+    train_text_encoder,
+    unet_lr,
+    text_encoder_lr,
+    lr_scheduler,
+    lr_warmup_steps,
+    lr_num_cycles,
+    lr_min_scale,
+    lr_max_scale,
+    gradient_checkpointing,
+    use_ema,
+    use_8bit_adam,
+    adam_beta1,
+    adam_beta2,
+    adam_weight_decay,
+    adam_epsilon,
+    shuffle,
+    seed,
+    ucg,
+    partial_dropout,
+    image_log_steps,
+    image_log_amount,
+    save_every,
+):
     config = json.load(open(config_path))
     commandline_arg = " finetune.py"
     commandline_arg += f' --model="{model_path}"'
     commandline_arg += f' --run_name="{run_name}"'
     commandline_arg += f' --dataset="{bucket_path}"'
-    commandline_arg += f' --lr={unet_lr}'
-    commandline_arg += f' --epochs={int(epochs)}'
-    commandline_arg += f' --batch_size={int(batch_size)}'
-    commandline_arg += f' --ucg={ucg}'
-    commandline_arg += f' --adam_beta1={adam_beta1}'
-    commandline_arg += f' --adam_beta2={adam_beta2}'
-    commandline_arg += f' --adam_weight_decay={adam_weight_decay}'
-    commandline_arg += f' --adam_epsilon={adam_epsilon}'
-    commandline_arg += f' --seed={int(seed)}'
+    commandline_arg += f" --lr={unet_lr}"
+    commandline_arg += f" --epochs={int(epochs)}"
+    commandline_arg += f" --batch_size={int(batch_size)}"
+    commandline_arg += f" --ucg={ucg}"
+    commandline_arg += f" --adam_beta1={adam_beta1}"
+    commandline_arg += f" --adam_beta2={adam_beta2}"
+    commandline_arg += f" --adam_weight_decay={adam_weight_decay}"
+    commandline_arg += f" --adam_epsilon={adam_epsilon}"
+    commandline_arg += f" --seed={int(seed)}"
     commandline_arg += f' --output_path="{output_path}"'
-    commandline_arg += f' --save_steps={int(save_every)}'
-    commandline_arg += f' --image_log_steps={int(image_log_steps)}'
-    commandline_arg += f' --image_log_amount={int(image_log_amount)}'
-    commandline_arg += f' --lr_scheduler={lr_scheduler}'
-    commandline_arg += f' --lr_warmup_steps={int(lr_warmup_steps)}'
-    commandline_arg += f' --lr_num_cycles={int(lr_num_cycles)}'
-    commandline_arg += f' --lr_min_scale={lr_min_scale}'
-    commandline_arg += f' --lr_max_scale={lr_max_scale}'
-    commandline_arg += f' --extended_mode_chunks={int(extended_mode_chunks)}'
-    commandline_arg += f' --text_encoder_learning_rate={text_encoder_lr}'
-    commandline_arg += f' --partial_dropout={partial_dropout}'
-    commandline_arg += f' --shuffle={shuffle}'
+    commandline_arg += f" --save_steps={int(save_every)}"
+    commandline_arg += f" --image_log_steps={int(image_log_steps)}"
+    commandline_arg += f" --image_log_amount={int(image_log_amount)}"
+    commandline_arg += f" --lr_scheduler={lr_scheduler}"
+    commandline_arg += f" --lr_warmup_steps={int(lr_warmup_steps)}"
+    commandline_arg += f" --lr_num_cycles={int(lr_num_cycles)}"
+    commandline_arg += f" --lr_min_scale={lr_min_scale}"
+    commandline_arg += f" --lr_max_scale={lr_max_scale}"
+    commandline_arg += f" --extended_mode_chunks={int(extended_mode_chunks)}"
+    commandline_arg += f" --text_encoder_learning_rate={text_encoder_lr}"
+    commandline_arg += f" --partial_dropout={partial_dropout}"
+    commandline_arg += f" --shuffle={shuffle}"
     if use_8bit_adam:
-        commandline_arg += f' --use_8bit_adam'
+        commandline_arg += f" --use_8bit_adam"
     if use_xformers:
-        commandline_arg += f' --use_xformers'
+        commandline_arg += f" --use_xformers"
     if clip_penultimate:
-        commandline_arg += f' --clip_penultimate'
+        commandline_arg += f" --clip_penultimate"
     if train_text_encoder:
-        commandline_arg += f' --train_text_encoder'
+        commandline_arg += f" --train_text_encoder"
     if gradient_checkpointing:
-        commandline_arg += f' --gradient_checkpointing'
+        commandline_arg += f" --gradient_checkpointing"
     if fp16:
-        commandline_arg += f' --fp16'
+        commandline_arg += f" --fp16"
     if use_ema:
-        commandline_arg += f' --use_ema'
+        commandline_arg += f" --use_ema"
 
     try:
         os.environ["SD_TRAINER_CONFIG_FILE"] = config_path
-        subprocess.run('accelerate launch' + commandline_arg, shell=True, check=True, env=os.environ)
+        subprocess.run("accelerate launch" + commandline_arg, shell=True, check=True, env=os.environ)
     except subprocess.CalledProcessError as e:
         print(f"Command execution failed with return code {e.returncode} and error message: {e.stderr}")
 
@@ -114,8 +115,12 @@ def load():
     with gr.Row():
         unet_lr = gr.Number(value=5e-7, label="Unet LR", interactive=True)
         text_encoder_lr = gr.Number(value=7e-9, label="Text Encoder LR", interactive=True)
-        lr_scheduler = gr.Dropdown(["linear", "cosine", "cosine_with_restarts", "polynomial"], label="Scheduler",
-                                   value="cosine_with_restarts", interactive=True)
+        lr_scheduler = gr.Dropdown(
+            ["linear", "cosine", "cosine_with_restarts", "polynomial"],
+            label="Scheduler",
+            value="cosine_with_restarts",
+            interactive=True,
+        )
         with gr.Accordion(label=" Scheduler Settings (advanced)", open=False):
             lr_warmup_steps = gr.Number(value=0, label="Warmup Steps", interactive=True)
             lr_num_cycles = gr.Number(value=1, label="Number of Cycles", interactive=True)
@@ -179,7 +184,7 @@ def load():
             partial_dropout,
             image_log_steps,
             image_log_amount,
-            save_every
+            save_every,
         ],
-        outputs=[]
+        outputs=[],
     )

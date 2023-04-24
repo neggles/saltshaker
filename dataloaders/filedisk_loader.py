@@ -16,7 +16,7 @@ import shared
 ###############
 # setup: config.json
 ###############
-with open(os.environ['SD_TRAINER_CONFIG_FILE'], "r") as config_file:
+with open(os.environ["SD_TRAINER_CONFIG_FILE"], "r") as config_file:
     config = json.load(config_file)
 
 shuffle_after_n_captions = config["SHUFFLE_CAPTIONS_AFTER"]
@@ -24,8 +24,9 @@ aspect_f = config["BUCKETS"]
 aspect = list(zip(aspect_f["bucket_ratios"], aspect_f["buckets"]))
 all_files = [os.path.join(config["DATA_PATH"], filename) for filename in os.listdir(config["DATA_PATH"])]
 all_latent_files = [instance for instance in all_files if instance.endswith(".latent")]
-all_image_files = [instance for instance in all_files if
-                   instance.split(".")[-1] in shared.VALID_IMAGE_EXTENSIONS]
+all_image_files = [
+    instance for instance in all_files if instance.split(".")[-1] in shared.VALID_IMAGE_EXTENSIONS
+]
 all_caption_files = [instance for instance in all_files if instance.endswith(".txt")]
 print(f"found {len(all_caption_files)} caption files.")
 print(f"found {len(all_image_files)} image files.")
@@ -39,26 +40,33 @@ assert len(all_image_files) > 0
 # Tensor Silliness
 ###############
 class StringArray:
-    def __init__(self, strings: typing.List[str],
-                 encoding: typing.Literal['ascii', 'utf_16_le', 'utf_32_le'] = 'utf_16_le'):
+    def __init__(
+        self,
+        strings: typing.List[str],
+        encoding: typing.Literal["ascii", "utf_16_le", "utf_32_le"] = "utf_16_le",
+    ):
         strings = list(strings)
         self.encoding = encoding
         self.multiplier = dict(ascii=1, utf_16_le=2, utf_32_le=4)[encoding]
-        self.data = torch.ByteTensor(torch.ByteStorage.from_buffer(''.join(strings).encode(encoding)))
+        self.data = torch.ByteTensor(torch.ByteStorage.from_buffer("".join(strings).encode(encoding)))
         self.cum_len = torch.LongTensor(list(map(len, strings))).cumsum(dim=0).mul_(self.multiplier)
         assert int(self.cum_len[-1]) == len(
-            self.data), f'[{encoding}] is not enough to hold characters, use a larger character class'
+            self.data
+        ), f"[{encoding}] is not enough to hold characters, use a larger character class"
 
     def __getitem__(self, i):
-        return bytes(self.data[(self.cum_len[i - 1] if i >= 1 else 0): self.cum_len[i]]).decode(self.encoding)
+        return bytes(self.data[(self.cum_len[i - 1] if i >= 1 else 0) : self.cum_len[i]]).decode(
+            self.encoding
+        )
 
     def __len__(self):
         return len(self.cum_len)
 
     def tolist(self):
         data_bytes, cumlen = bytes(self.data), self.cum_len.tolist()
-        return [data_bytes[0:cumlen[0]].decode(self.encoding)] + [data_bytes[start:end].decode(self.encoding) for
-                                                                  start, end in zip(cumlen[:-1], cumlen[1:])]
+        return [data_bytes[0 : cumlen[0]].decode(self.encoding)] + [
+            data_bytes[start:end].decode(self.encoding) for start, end in zip(cumlen[:-1], cumlen[1:])
+        ]
 
 
 ###############
@@ -73,8 +81,12 @@ def find_aspect(width: int, height: int) -> Tuple[int, int]:
 def generate_images() -> Generator[Tuple[str, str, float], None, None]:
     for image_file in all_image_files:
         width, height = imagesize.get(image_file)
-        yield ('data_source', ".".join(os.path.basename(image_file).split(".")[:-1]), find_aspect(width, height),
-               (width, height))
+        yield (
+            "data_source",
+            ".".join(os.path.basename(image_file).split(".")[:-1]),
+            find_aspect(width, height),
+            (width, height),
+        )
 
 
 ###############
@@ -95,15 +107,12 @@ class ImageStore:
 
 
 class AspectBucket:
-    def __init__(self, store: ImageStore,
-                 batch_size: int,
-                 max_ratio: float = 2):
-
+    def __init__(self, store: ImageStore, batch_size: int, max_ratio: float = 2):
         self.batch_size = batch_size
         self.total_dropped = 0
 
         if max_ratio <= 0:
-            self.max_ratio = float('inf')
+            self.max_ratio = float("inf")
         else:
             self.max_ratio = max_ratio
 
@@ -123,8 +132,9 @@ class AspectBucket:
         # and the output is the bucket index in the self.buckets array
         # to find the best fit we can just round that number to get the index
         self._bucket_ratios = aspect_f["bucket_ratios"]
-        self._bucket_interp = interp1d(self._bucket_ratios, list(range(len(self.buckets))), assume_sorted=True,
-                                       fill_value=None)
+        self._bucket_interp = interp1d(
+            self._bucket_ratios, list(range(len(self.buckets))), assume_sorted=True, fill_value=None
+        )
 
         # convert buckets from lists (from the json) to tuples
         self.buckets = list(map(lambda x: tuple(x), self.buckets))
@@ -152,9 +162,7 @@ class AspectBucket:
         index_schedule = list(range(max_bucket_len))
         random.shuffle(index_schedule)
 
-        bucket_len_table = {
-            b: len(self.bucket_data[b]) for b in self.buckets
-        }
+        bucket_len_table = {b: len(self.bucket_data[b]) for b in self.buckets}
 
         bucket_schedule = []
         for i, b in enumerate(self.buckets):
@@ -162,13 +170,9 @@ class AspectBucket:
 
         random.shuffle(bucket_schedule)
 
-        bucket_pos = {
-            b: 0 for b in self.buckets
-        }
+        bucket_pos = {b: 0 for b in self.buckets}
 
-        total_generated_by_bucket = {
-            b: 0 for b in self.buckets
-        }
+        total_generated_by_bucket = {b: 0 for b in self.buckets}
 
         for bucket_index in bucket_schedule:
             b = self.buckets[bucket_index]
@@ -203,7 +207,7 @@ class AspectBucket:
 
             # make sure the buckets have an exact number of elements for the batch
             to_drop = len(values) % self.batch_size
-            self.bucket_data[b] = list(values[:len(values) - to_drop])
+            self.bucket_data[b] = list(values[: len(values) - to_drop])
             total_dropped += to_drop
 
         self.total_dropped = total_dropped
@@ -230,7 +234,8 @@ class AspectBucket:
 # Regex & Setup
 ###############
 redacted_regex = re.compile(
-    "hi. the name of this regex matched a regex, and I don't know what it's supposed to do anyway :P")
+    "hi. the name of this regex matched a regex, and I don't know what it's supposed to do anyway :P"
+)
 
 
 ###############
@@ -247,17 +252,17 @@ class AspectDataset(torch.utils.data.Dataset):
         return self.len
 
     def __getitem__(self, item: Tuple[int, int, int]):
-        return_dict = {'latent': None, 'captions': None}
+        return_dict = {"latent": None, "captions": None}
         # image = self.data[item[0]]
         source_name = self.data_source_name[item[0]]
         source_id = self.data_source_id[item[0]]
 
-        f = open(os.path.join(config["DATA_PATH"], source_id + ".latent"), 'rb')
-        return_dict['latent'] = f.read()
+        f = open(os.path.join(config["DATA_PATH"], source_id + ".latent"), "rb")
+        return_dict["latent"] = f.read()
         f.close()
 
-        f = open(os.path.join(config["DATA_PATH"], source_id + ".txt"), 'r')
-        captions = [tag.strip() for tag in f.read().strip().split(',')]
+        f = open(os.path.join(config["DATA_PATH"], source_id + ".txt"), "r")
+        captions = [tag.strip() for tag in f.read().strip().split(",")]
         f.close()
 
         header_captions = captions[:shuffle_after_n_captions]
@@ -265,15 +270,15 @@ class AspectDataset(torch.utils.data.Dataset):
         random.shuffle(tail_captions)
         caption_file = header_captions + tail_captions
 
-        return_dict['captions'] = caption_file
-        return_dict['source_name'] = source_name
-        return_dict['source_id'] = source_id
+        return_dict["captions"] = caption_file
+        return_dict["source_name"] = source_name
+        return_dict["source_id"] = source_id
 
         return (
             copy.deepcopy(return_dict["latent"]),
             copy.deepcopy(return_dict["captions"]),
             copy.deepcopy(return_dict["source_name"]),
-            copy.deepcopy(return_dict["source_id"])
+            copy.deepcopy(return_dict["source_id"]),
         )
 
 

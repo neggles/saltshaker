@@ -16,14 +16,15 @@ def _sort_by_area(bucket: tuple) -> float:
 
 
 class AspectBucket:
-    def __init__(self,
-                 num_buckets: int,
-                 bucket_side_min: int = 256,
-                 bucket_side_max: int = 768,
-                 bucket_side_increment: int = 64,
-                 max_image_area: int = 768 * 768,
-                 max_ratio: float = 2):
-
+    def __init__(
+        self,
+        num_buckets: int,
+        bucket_side_min: int = 256,
+        bucket_side_max: int = 768,
+        bucket_side_increment: int = 64,
+        max_image_area: int = 768 * 768,
+        max_ratio: float = 2,
+    ):
         self.requested_bucket_count = num_buckets
         self.bucket_length_min = bucket_side_min
         self.bucket_length_max = bucket_side_max
@@ -32,7 +33,7 @@ class AspectBucket:
         self.total_dropped = 0
 
         if max_ratio <= 0:
-            self.max_ratio = float('inf')
+            self.max_ratio = float("inf")
         else:
             self.max_ratio = max_ratio
 
@@ -43,9 +44,14 @@ class AspectBucket:
         self.init_buckets()
 
     def init_buckets(self):
-        possible_lengths = list(range(self.bucket_length_min, self.bucket_length_max + 1, self.bucket_increment))
-        possible_buckets = list((w, h) for w, h in itertools.product(possible_lengths, possible_lengths)
-                                if w >= h and w * h <= self.max_image_area and w / h <= self.max_ratio)
+        possible_lengths = list(
+            range(self.bucket_length_min, self.bucket_length_max + 1, self.bucket_increment)
+        )
+        possible_buckets = list(
+            (w, h)
+            for w, h in itertools.product(possible_lengths, possible_lengths)
+            if w >= h and w * h <= self.max_image_area and w / h <= self.max_ratio
+        )
 
         buckets_by_ratio = {}
 
@@ -53,7 +59,7 @@ class AspectBucket:
         for bucket in possible_buckets:
             w, h = bucket
             # use precision to avoid spooky floats messing up your day
-            ratio = '{:.4e}'.format(w / h)
+            ratio = "{:.4e}".format(w / h)
 
             if ratio not in buckets_by_ratio:
                 group = set()
@@ -66,8 +72,10 @@ class AspectBucket:
         # now we take the list of buckets we generated and pick the largest by area for each (the first sorted)
         # then we put all of those in a list, sorted by the aspect ratio
         # the square bucket (LxL) will be the first
-        unique_ratio_buckets = sorted([sorted(buckets, key=_sort_by_area)[-1]
-                                       for buckets in buckets_by_ratio.values()], key=_sort_by_ratio)
+        unique_ratio_buckets = sorted(
+            [sorted(buckets, key=_sort_by_area)[-1] for buckets in buckets_by_ratio.values()],
+            key=_sort_by_ratio,
+        )
 
         # how many buckets to create for each side of the distribution
         bucket_count_each = int(np.clip((self.requested_bucket_count + 1) / 2, 1, len(unique_ratio_buckets)))
@@ -78,8 +86,13 @@ class AspectBucket:
 
         # make the buckets, make sure they are unique (to remove the duplicated square bucket), and sort them by ratio
         # here we add the portrait buckets by reversing the dimensions of the landscape buckets we generated above
-        buckets = sorted({*(unique_ratio_buckets[i] for i in indices),
-                          *(tuple(reversed(unique_ratio_buckets[i])) for i in indices)}, key=_sort_by_ratio)
+        buckets = sorted(
+            {
+                *(unique_ratio_buckets[i] for i in indices),
+                *(tuple(reversed(unique_ratio_buckets[i])) for i in indices),
+            },
+            key=_sort_by_ratio,
+        )
 
         self.buckets = buckets
 
@@ -88,8 +101,9 @@ class AspectBucket:
         # and the output is the bucket index in the self.buckets array
         # to find the best fit we can just round that number to get the index
         self._bucket_ratios = [w / h for w, h in buckets]
-        self._bucket_interp = interp1d(self._bucket_ratios, list(range(len(buckets))), assume_sorted=True,
-                                       fill_value=None)
+        self._bucket_interp = interp1d(
+            self._bucket_ratios, list(range(len(buckets))), assume_sorted=True, fill_value=None
+        )
 
         for b in buckets:
             self.bucket_data[b] = []
@@ -98,9 +112,11 @@ class AspectBucket:
         return {"buckets": self.buckets, "bucket_ratios": self._bucket_ratios}
 
 
-def create_aspect(num_buckets: int = 32,
-                  bucket_side_min: int = 256,
-                  bucket_side_max: int = 768 * 2,
-                  bucket_max_area: int = 768 * 768):
+def create_aspect(
+    num_buckets: int = 32,
+    bucket_side_min: int = 256,
+    bucket_side_max: int = 768 * 2,
+    bucket_max_area: int = 768 * 768,
+):
     bucket = AspectBucket(num_buckets, bucket_side_min, bucket_side_max, 64, bucket_max_area, 2.0)
     return bucket.get_bucket_info()
