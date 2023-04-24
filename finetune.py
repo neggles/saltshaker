@@ -12,6 +12,7 @@ import resource
 import socket
 import sys
 import time
+import warnings
 
 import accelerate
 import diffusers
@@ -21,6 +22,7 @@ import pynvml
 import torch
 import tqdm
 import transformers
+from torch.utils.data import DataLoader
 
 from dataloaders.filedisk_loader import AspectBucket, AspectBucketSampler, AspectDataset
 
@@ -44,6 +46,9 @@ from PIL.PngImagePlugin import PngInfo
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+
+warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
+
 
 # Latent Scale Factor - https://github.com/huggingface/diffusers/issues/437
 L_SCALE_FACTOR = 0.18215
@@ -227,6 +232,9 @@ parser.add_argument(
     default=0,
     help="shuffle the first n tags within the first n tags, and shuffle the trailing tags with each other.",
 )
+parser.add_argument(
+    "--gradient_accumulation_steps", type=int, default=1, help="Number of gradient accumulation steps"
+)
 args = parser.parse_args()
 
 
@@ -365,7 +373,7 @@ class StableDiffusionTrainer:
         text_encoder: CLIPTextModel,
         tokenizer: CLIPTokenizer,
         ema: EMAModel,
-        train_dataloader: torch.utils.data.DataLoader,
+        train_dataloader: DataLoader,
         noise_scheduler: DDPMScheduler,
         lr_scheduler: torch.optim.lr_scheduler.LambdaLR,
         optimizer: torch.optim.Optimizer,
@@ -738,7 +746,7 @@ class StableDiffusionTrainer:
         # Sample a random timestep for each image
         timesteps = torch.randint(
             0,
-            self.noise_scheduler.num_train_timesteps,
+            self.noise_scheduler.config.num_train_timesteps,
             (bsz,),
             device=latents.device,
         )
@@ -908,7 +916,9 @@ def main() -> None:
 
     # get device
     accelerator = accelerate.Accelerator(
-        gradient_accumulation_steps=1, mixed_precision="fp16" if args.fp16 else "no", even_batches=False
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        mixed_precision="fp16" if args.fp16 else "no",
+        even_batches=False,
     )
 
     # Set seed
@@ -931,6 +941,7 @@ def main() -> None:
     text_encoder = CLIPTextModel.from_pretrained(
         args.model, subfolder="text_encoder", use_auth_token=args.hf_token
     )
+
     if args.vae is None:
         vae = AutoencoderKL.from_pretrained(args.model, subfolder="vae", use_auth_token=args.hf_token)
     else:
