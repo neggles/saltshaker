@@ -271,3 +271,11 @@ $RECYCLE.BIN/
 # local misc and temp
 /misc/
 /temp/
+
+# train data
+/data/
+/buckets.pkl
+/train_config.json
+
+# envrc
+/.envrc
