@@ -235,6 +235,7 @@ parser.add_argument(
 parser.add_argument(
     "--gradient_accumulation_steps", type=int, default=1, help="Number of gradient accumulation steps"
 )
+parser.add_argument("--use_tf32", action="store_true", help="Whether to allow TF32 on Ampere+ GPUs")
 args = parser.parse_args()
 
 
@@ -1089,6 +1090,9 @@ def main() -> None:
         text_encoder = text_encoder.to(accelerator.device, dtype=weight_dtype)
     else:
         text_encoder = text_encoder.to(accelerator.device)
+
+    if args.use_tf32:
+        torch.backends.cuda.matmul.allow_tf32 = True
 
     # create ema
     if args.use_ema:
