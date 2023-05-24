@@ -7,8 +7,8 @@ import torchvision
 from diffusers import AutoencoderKL
 from PIL import Image
 
-import shared
-from dataloaders.filedisk_loader import AspectBucket
+import saltshaker.shared as shared
+from saltshaker.data.filedisk_loader import AspectBucket
 
 
 def encode(model, buckets, config, progress):

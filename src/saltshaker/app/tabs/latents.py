@@ -1,8 +1,8 @@
 import json
+import os
 import pickle
 
 import gradio as gr
-import os
 
 
 def make_latents(model_path, config_path, buckets_path, progress=gr.Progress()):
@@ -10,7 +10,7 @@ def make_latents(model_path, config_path, buckets_path, progress=gr.Progress()):
         print("creating latents...")
         config = json.load(open(config_path))
 
-        from encoder import encode
+        from saltshaker.data.encoder import encode
 
         encode(model_path, buckets_path, config, progress=progress)
     except Exception as e:
@@ -22,7 +22,7 @@ def make_buckets(config_path, buckets_path, batch):
     try:
         # horribly hacky but oh well
         os.environ["SD_TRAINER_CONFIG_FILE"] = config_path
-        from dataloaders.filedisk_loader import ImageStore, AspectBucket
+        from saltshaker.data.filedisk_loader import AspectBucket, ImageStore
 
         print("creating image store...")
         image_store = ImageStore()

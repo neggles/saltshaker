@@ -1,9 +1,9 @@
 import json
 import os
 
-from create_aspect import create_aspect
+from saltshaker.data.bucket import create_aspect
 import gradio as gr
-import shared
+import saltshaker.shared as shared
 
 
 def make_config(data_path, config_path, num_buckets, bucket_side_min, bucket_side_max, max_image_area):

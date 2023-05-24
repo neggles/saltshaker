@@ -24,7 +24,7 @@ import tqdm
 import transformers
 from torch.utils.data import DataLoader
 
-from dataloaders.filedisk_loader import AspectBucket, AspectBucketSampler, AspectDataset
+from saltshaker.data.filedisk_loader import AspectBucket, AspectBucketSampler, AspectDataset
 
 try:
     pynvml.nvmlInit()
@@ -873,36 +873,6 @@ class StableDiffusionTrainer:
         self.run.close()
 
 
-def get_cosine_with_hard_restarts_schedule_with_warmup_and_scaling(
-    optimizer: Optimizer,
-    num_warmup_steps: int,
-    num_training_steps: int,
-    num_cycles: float = 1,
-    last_epoch: int = -1,
-    max_scale: float = 1.0,
-    min_scale: float = 0.0,
-):
-    def lr_lambda(current_step):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(
-            max(1, num_training_steps - num_warmup_steps)
-        )
-        if progress >= 1.0:
-            return 0.0
-        return max(
-            0.0,
-            0.5
-            * (
-                max_scale
-                + min_scale
-                + (max_scale - min_scale) * math.cos(math.pi * ((float(num_cycles) * progress) % 1.0))
-            ),
-        )
-
-    return LambdaLR(optimizer, lr_lambda, last_epoch)
-
-
 def main() -> None:
     if args.hf_token is None:
         try:
@@ -1056,7 +1026,7 @@ def main() -> None:
 
     if args.lr_scheduler == "cosine_with_restarts":
         print("lr scheduler = cosine with restarts")
-        lr_scheduler = get_cosine_with_hard_restarts_schedule_with_warmup_and_scaling(
+        lr_scheduler = get_cosine_restart_scheduler_scaled(
             optimizer=optimizer,
             num_warmup_steps=args.lr_warmup_steps,
             num_training_steps=args.epochs * len(train_dataloader),

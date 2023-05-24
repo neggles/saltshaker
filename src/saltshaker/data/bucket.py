@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import argparse
 import itertools
 import json
+from pathlib import Path
+from typing import Dict, List
+
 import numpy as np
 from scipy.interpolate import interp1d
-from typing import Dict, List
 
 
 def _sort_by_ratio(bucket: tuple) -> float:
@@ -43,7 +44,7 @@ class AspectBucket:
         self.bucket_data: Dict[tuple, List[int]] = dict()
         self.init_buckets()
 
-    def init_buckets(self):
+    def init_buckets(self) -> None:
         possible_lengths = list(
             range(self.bucket_length_min, self.bucket_length_max + 1, self.bucket_increment)
         )
@@ -112,7 +113,7 @@ class AspectBucket:
         return {"buckets": self.buckets, "bucket_ratios": self._bucket_ratios}
 
 
-def create_aspect(
+def get_buckets(
     num_buckets: int = 32,
     bucket_side_min: int = 256,
     bucket_side_max: int = 768 * 2,
@@ -120,3 +121,11 @@ def create_aspect(
 ):
     bucket = AspectBucket(num_buckets, bucket_side_min, bucket_side_max, 64, bucket_max_area, 2.0)
     return bucket.get_bucket_info()
+
+
+if __name__ == "__main__":
+    buckets = get_buckets()
+    print(buckets)
+    outfile = Path("aspect_buckets.json")
+    json.dump(buckets, outfile.open("w", encoding="utf-8"), indent=2)
+    print(f"Saved buckets to {outfile}")

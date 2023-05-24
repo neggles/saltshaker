@@ -272,11 +272,8 @@ $RECYCLE.BIN/
 /misc/
 /temp/
 
-# train data
-/data/
-/buckets.pkl
-/train_config.json
-/train_command.sh
-
 # envrc
 /.envrc
+
+# version file
+src/saltshaker/_version.py

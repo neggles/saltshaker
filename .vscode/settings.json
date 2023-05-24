@@ -1,42 +1,90 @@
 {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.rulers": [ 100, 120 ],
+    "editor.trimAutoWhitespace": true,
+    "editor.formatOnSaveMode": "file",
+    
     "files.trimTrailingWhitespace": true,
-    "editor.formatOnSave": true,
+    "files.trimFinalNewlines": true,
+    "files.associations": {
+        ".clang-format": "yaml",
+        ".config": "shellscript",
+        ".gitignore": "gitignore",
+        ".vscode/*.json": "jsonc",
+        "*.sh.tmpl": "jinja-shell",
+        "*.txt": "plaintext",
+        "requirements*.txt": "pip-requirements",
+        "setup.cfg": "ini",
+        "ssh_config": "ssh_config"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/__pycache__": true
+    },
+    
     "search.exclude": {
         "**/node_modules": true,
         "**/bower_components": true,
         "**/*.code-search": true,
-        "**/.venv": true
+        "**/.venv": true,
+        "**/__pycache__": true
     },
+    "python.analysis.addImport.exactMatchOnly": false,
+    "python.formatting.blackArgs": [ "--line-length=110" ],
+    
     "[python]": {
         "editor.formatOnSave": true,
-        "editor.formatOnPaste": false,
-        "files.trimTrailingWhitespace": true
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
     },
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": false,
+    "ruff.args": [ "--line-length=110", "--extend-ignore=F401,F841,E501" ],
+    "ruff.fixAll": true,
+    "ruff.organizeImports": true,
+    "ruff.logLevel": "warn",
+    "python.formatting.provider": "none",
+    "black-formatter.args": [ "--line-length=110" ],
+    "python.analysis.diagnosticMode": "openFilesOnly",
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.fixAll": [ "source.convertImportFormat" ],
+    "python.analysis.exclude": [ "**/node_modules", "**/__pycache__", "**/.venv" ],
+    "python.linting.enabled": false,
+    "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": false,
-    "python.linting.flake8Enabled": true,
+    "python.linting.pylintEnabled": false,
     "python.linting.flake8Args": [
+        "--config=${workspaceFolder}/setup.cfg",
         "--max-line-length=110",
-        "--extend-ignore=F841,F401,E501,E203,W503,E266,W391"
+        "--extend-ignore=E501,E203"
     ],
-    "python.analysis.addImport.exactMatchOnly": false,
-    "python.formatting.blackArgs": [
-        "--line-length=110"
-    ],
-    "editor.insertSpaces": true,
-    "editor.tabSize": 4,
-    "editor.rulers": [
-        100,
-        120
-    ],
-    "python.formatting.provider": "black",
-    "python.analysis.autoSearchPaths": true,
+    "autoDocstring.docstringFormat": "sphinx",
+    "autoDocstring.startOnNewLine": false,
 
     "[json]": {
+        "editor.codeActionsOnSave": {
+            "source.fixAll.sortJSON": false
+        },
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true,
-        "editor.tabSize": 2
+        "editor.tabSize": 4
     },
+    "[jsonc]": {
+        "editor.codeActionsOnSave": {
+            "source.fixAll.sortJSON": false
+        },
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 4
+    },
+    "json.format.keepLines": true,
+    
     "[toml]": {
         "editor.formatOnSave": true,
         "editor.tabSize": 2

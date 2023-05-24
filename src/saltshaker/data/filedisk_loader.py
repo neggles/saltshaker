@@ -1,39 +1,39 @@
 import copy
-from datetime import datetime
 import json
 import random
 import re
-from scipy.interpolate import interp1d
+import typing
+from pathlib import Path
+from typing import Dict, Generator, List, Tuple
+
+import imagesize
 import torch
 import tqdm
-from typing import Dict, List, Generator, Tuple
-import typing
-import os
-import imagesize
+from scipy.interpolate import interp1d
 
-import shared
+import saltshaker.shared as shared
 
 ###############
 # setup: config.json
 ###############
-with open(os.environ["SD_TRAINER_CONFIG_FILE"], "r") as config_file:
-    config = json.load(config_file)
+# with open(os.environ["SD_TRAINER_CONFIG_FILE"], "r") as config_file:
+#     config = json.load(config_file)
 
-shuffle_after_n_captions = config["SHUFFLE_CAPTIONS_AFTER"]
-aspect_f = config["BUCKETS"]
-aspect = list(zip(aspect_f["bucket_ratios"], aspect_f["buckets"]))
-all_files = [os.path.join(config["DATA_PATH"], filename) for filename in os.listdir(config["DATA_PATH"])]
-all_latent_files = [instance for instance in all_files if instance.endswith(".latent")]
-all_image_files = [
-    instance for instance in all_files if instance.split(".")[-1] in shared.VALID_IMAGE_EXTENSIONS
-]
-all_caption_files = [instance for instance in all_files if instance.endswith(".txt")]
-print(f"found {len(all_caption_files)} caption files.")
-print(f"found {len(all_image_files)} image files.")
-print(f"found {len(all_latent_files)} latent files.")
+# shuffle_after_n_captions = config["SHUFFLE_CAPTIONS_AFTER"]
+# aspect_f = config["BUCKETS"]
+# aspect = list(zip(aspect_f["bucket_ratios"], aspect_f["buckets"]))
+# all_files = [os.path.join(config["DATA_PATH"], filename) for filename in os.listdir(config["DATA_PATH"])]
+# all_latent_files = [instance for instance in all_files if instance.endswith(".latent")]
+# all_image_files = [
+#     instance for instance in all_files if instance.split(".")[-1] in shared.VALID_IMAGE_EXTENSIONS
+# ]
+# all_caption_files = [instance for instance in all_files if instance.endswith(".txt")]
+# print(f"found {len(all_caption_files)} caption files.")
+# print(f"found {len(all_image_files)} image files.")
+# print(f"found {len(all_latent_files)} latent files.")
 
-assert len(all_image_files) == len(all_caption_files)
-assert len(all_image_files) > 0
+# assert len(all_image_files) == len(all_caption_files)
+# assert len(all_image_files) > 0
 
 
 ###############
@@ -72,18 +72,18 @@ class StringArray:
 ###############
 # Dataset Preparation
 ###############
-def find_aspect(width: int, height: int) -> Tuple[int, int]:
+def find_aspect(width: int, height: int, aspect) -> Tuple[int, int]:
     ratio = width / height
     ratio = min(aspect, key=lambda x: abs(x[0] - ratio))
     return (ratio[1][0], ratio[1][1])
 
 
-def generate_images() -> Generator[Tuple[str, str, float], None, None]:
+def generate_images(all_image_files: List[Path]) -> Generator[Tuple[str, str, float], None, None]:
     for image_file in all_image_files:
         width, height = imagesize.get(image_file)
         yield (
             "data_source",
-            ".".join(os.path.basename(image_file).split(".")[:-1]),
+            ".".join(image_file.stem),
             find_aspect(width, height),
             (width, height),
         )
@@ -93,9 +93,9 @@ def generate_images() -> Generator[Tuple[str, str, float], None, None]:
 # ImageStore
 ###############
 class ImageStore:
-    def __init__(self) -> None:
+    def __init__(self, all_image_files: list) -> None:
         self.image_files = []
-        self.image_files.extend(tqdm.tqdm(generate_images(), total=len(all_image_files)))
+        self.image_files.extend(tqdm.tqdm(generate_images(all_image_files), total=len(all_image_files)))
 
     def __len__(self) -> int:
         return len(self.image_files)
@@ -107,7 +107,7 @@ class ImageStore:
 
 
 class AspectBucket:
-    def __init__(self, store: ImageStore, batch_size: int, max_ratio: float = 2):
+    def __init__(self, store: ImageStore, batch_size: int, max_ratio: float = 2, aspect_f: dict = None):
         self.batch_size = batch_size
         self.total_dropped = 0
 
@@ -115,6 +115,8 @@ class AspectBucket:
             self.max_ratio = float("inf")
         else:
             self.max_ratio = max_ratio
+
+        self.aspect_f = aspect_f
 
         self.store = store
         self.buckets = []
@@ -125,13 +127,13 @@ class AspectBucket:
         self.fill_buckets()
 
     def init_buckets(self):
-        self.buckets = aspect_f["buckets"]
+        self.buckets = self.aspect_f["buckets"]
 
         # cache the bucket ratios and the interpolator that will be used for calculating the best bucket later
         # the interpolator makes a 1d piecewise interpolation where the input (x-axis) is the bucket ratio,
         # and the output is the bucket index in the self.buckets array
         # to find the best fit we can just round that number to get the index
-        self._bucket_ratios = aspect_f["bucket_ratios"]
+        self._bucket_ratios = self.aspect_f["bucket_ratios"]
         self._bucket_interp = interp1d(
             self._bucket_ratios, list(range(len(self.buckets))), assume_sorted=True, fill_value=None
         )
@@ -142,10 +144,10 @@ class AspectBucket:
         for b in self.buckets:
             self.bucket_data[b] = []
 
-    def get_batch_count(self):
+    def get_batch_count(self) -> int:
         return sum(len(b) // self.batch_size for b in self.bucket_data.values())
 
-    def get_bucket_info(self):
+    def get_bucket_info(self) -> str:
         return json.dumps({"buckets": self.buckets, "bucket_ratios": self._bucket_ratios})
 
     def get_batch_iterator(self) -> Generator[Tuple[Tuple[int, int, int]], None, None]:
@@ -242,11 +244,16 @@ redacted_regex = re.compile(
 # AspectDataset
 ###############
 class AspectDataset(torch.utils.data.Dataset):
-    def __init__(self, bucket: AspectBucket, ucg: float = 0.1):
+    def __init__(
+        self, datadir: Path, bucket: AspectBucket, ucg: float = 0.1, shuffle_after_n_captions: int = 0
+    ):
         self.ucg = ucg
         self.data_source_name = StringArray(map(lambda x: x[0], bucket.store.image_files))
         self.data_source_id = StringArray(map(lambda x: x[1], bucket.store.image_files))
         self.len = len(bucket.store)
+        self.infile = datadir
+
+        self.shuffle_after = shuffle_after_n_captions
 
     def __len__(self):
         return self.len
@@ -257,16 +264,14 @@ class AspectDataset(torch.utils.data.Dataset):
         source_name = self.data_source_name[item[0]]
         source_id = self.data_source_id[item[0]]
 
-        f = open(os.path.join(config["DATA_PATH"], source_id + ".latent"), "rb")
-        return_dict["latent"] = f.read()
-        f.close()
+        latent_file = self.datadir.join(f"{source_id}.latent")
+        return_dict["latent"] = latent_file.read_bytes()
 
-        f = open(os.path.join(config["DATA_PATH"], source_id + ".txt"), "r")
-        captions = [tag.strip() for tag in f.read().strip().split(",")]
-        f.close()
+        tag_file = self.datadir.join(f"{source_id}.txt")
+        captions = [tag.strip() for tag in tag_file.read_text().strip().split(",")]
 
-        header_captions = captions[:shuffle_after_n_captions]
-        tail_captions = captions[shuffle_after_n_captions:]
+        header_captions = captions[: self.shuffle_after]
+        tail_captions = captions[self.shuffle_after :]
         random.shuffle(tail_captions)
         caption_file = header_captions + tail_captions
 
