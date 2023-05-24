@@ -12,16 +12,17 @@ L_SCALE_FACTOR = 0.18215
 class TrainerOpts(BaseModel):
     model_path: str = Field(...)
     dataset_path: PathLike = Field(...)
+    vae: Optional[str] = None
     run_name: str = "stable_diffusion"
     output_path: PathLike = Field(...)
     use_wandb: bool = False
+    hf_token: Optional[str] = None
 
     save_steps: int = 1000
     resume_steps: int = -1
     shuffle: bool = True
     reshuffle_tags: bool = False
-    hf_token: Optional[str] = None
-    vae: Optional[str] = None
+    chunked_tag_shuffle: int = 0
 
     sample_steps: int = 200
     sample_count: int = 4
@@ -58,7 +59,6 @@ class TrainerOpts(BaseModel):
     extended_mode_chunks: int = 0
     clip_penultimate: bool = False
     log_loss_ema: bool = False
-    chunked_tag_shuffle: int = 0
 
     xformers: bool = False
     debug: bool = False

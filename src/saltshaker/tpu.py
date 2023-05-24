@@ -47,11 +47,56 @@ if accelerate.utils.is_rich_available():
 app = typer.Typer()
 
 
-def main(config: TrainerOpts) -> None:
-    config.hf_token = getenv("HF_TOKEN", config.hf_token) if config.hf_token is None else config.hf_token
+def reshuffle(data, chunked_tag_shuffle: int = 0, reshuffle_tags: bool = True):
+    if reshuffle_tags:
+        if chunked_tag_shuffle == 0:
+            copy_data = []
+            copy_data[:] = data
+            random.shuffle(copy_data)
+            return copy_data
+        else:
+            d_head = data[:chunked_tag_shuffle]
+            d_tail = data[chunked_tag_shuffle:]
+            random.shuffle(d_head)
+            random.shuffle(d_tail)
+            return d_head + d_tail
+    return data
 
-    config.output_path = Path(config.output_path)
+
+def drop_random(data, partial_dropout: bool = False):
+    if random.random() > config.ucg:
+        if partial_dropout:
+            # the equation https://www.desmos.com/calculator/yrfoynzfcp is used
+            # to keep a random percent of the data, where the random number is the x-axis
+            x = random.randint(0, 100)
+            if x >= 50:
+                return ", ".join(reshuffle(data))
+            else:
+                return ", ".join(reshuffle(data[: len(data) * x * 2 // 100]))
+        return ", ".join(reshuffle(data))
+    else:
+        # drop for unconditional guidance
+        return ""
+
+
+def collate_fn(examples):
+    return_dict = {
+        "latents": [example[0] for example in examples],
+        "captions": [drop_random(example[1]) for example in examples],
+        "source_name": [example[2] for example in examples],
+        "source_id": [example[3] for example in examples],
+    }
+    return return_dict
+
+
+def main(config: TrainerOpts) -> None:
+    if config.hf_token is None:
+        config.hf_token = getenv("HF_TOKEN", None)
+    if config.hf_token is None:
+        raise ValueError("You need to supply a HuggingFace token via --hf-token or HF_TOKEN env variable")
+
     config.dataset_path = Path(config.dataset_path)
+    config.output_path = Path(config.output_path)
 
     # Set up debug logging as early as possible
     if config.debug is True:
@@ -67,6 +112,8 @@ def main(config: TrainerOpts) -> None:
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         mixed_precision=config.mixed_precision,
         even_batches=False,
+        log_with="wandb" if config.use_wandb else None,
+        project_dir=config.output_path.joinpath(config.run_name),
     )
 
     # Set seed
@@ -83,7 +130,7 @@ def main(config: TrainerOpts) -> None:
     accelerator.print("TRANSFORMERS:", transformers.__version__)
     accelerator.print("DIFFUSERS:", diffusers.__version__)
     accelerator.print("MODEL:", config.model_path)
-    accelerator.print("FP16:", config.fp16)
+    accelerator.print("MIXED PRECISION:", config.mixed_precision)
     accelerator.print("RANDOM SEED:", config.seed)
 
     # load tokenizer and text encoder
@@ -115,13 +162,16 @@ def main(config: TrainerOpts) -> None:
             text_encoder.requires_grad_(False)
 
         # load optimizer
-        optimizer = torch.optim.AdamW(
-            unet.parameters()
-            if not config.train_te
-            else [
+        if config.train_te:
+            opt_params = [
                 {"params": unet.parameters()},
                 {"params": text_encoder.parameters(), "lr": config.te_lr},
-            ],
+            ]
+        else:
+            opt_params = unet.parameters()
+
+        optimizer = torch.optim.AdamW(
+            opt_params,
             lr=config.lr,
             betas=(config.adam_beta1, config.adam_beta2),
             eps=config.adam_epsilon,
@@ -132,46 +182,6 @@ def main(config: TrainerOpts) -> None:
         noise_scheduler = DDPMScheduler.from_pretrained(
             config.model_path, subfolder="scheduler", use_auth_token=config.hf_token
         )
-
-    def reshuffle(data):
-        if config.reshuffle_tags:
-            if config.chunked_tag_shuffle == 0:
-                copy_data = []
-                copy_data[:] = data
-                random.shuffle(copy_data)
-                return copy_data
-            else:
-                d_head = data[: config.chunked_tag_shuffle]
-                d_tail = data[config.chunked_tag_shuffle :]
-                random.shuffle(d_head)
-                random.shuffle(d_tail)
-                return d_head + d_tail
-        return data
-
-    def drop_random(data):
-        if random.random() > config.ucg:
-            if config.partial_dropout:
-                # the equation https://www.desmos.com/calculator/yrfoynzfcp is used
-                # to keep a random percent of the data, where the random number is the x-axis
-                x = random.randint(0, 100)
-                if x >= 50:
-                    return ", ".join(reshuffle(data))
-                else:
-                    return ", ".join(reshuffle(data[: len(data) * x * 2 // 100]))
-            return ", ".join(reshuffle(data))
-        else:
-            # drop for unconditional guidance
-            return ""
-
-    def collate_fn(examples):
-        return_dict = {
-            "latents": [example[0] for example in examples],
-            "captions": [drop_random(example[1]) for example in examples],
-            "source_name": [example[2] for example in examples],
-            "source_id": [example[3] for example in examples],
-        }
-
-        return return_dict
 
     with accelerator.main_process_first():
         with config.dataset_path.open() as f:
