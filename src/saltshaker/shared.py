@@ -1,4 +1,4 @@
-from os import PathLike
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -11,10 +11,10 @@ L_SCALE_FACTOR = 0.18215
 
 class TrainerOpts(BaseModel):
     model_path: str = Field(...)
-    dataset_path: PathLike = Field(...)
+    dataset_path: Path = Field(...)
     vae: Optional[str] = None
     run_name: str = "stable_diffusion"
-    output_path: PathLike = Field(...)
+    output_path: Path = Field(...)
     use_wandb: bool = False
     hf_token: Optional[str] = None
 
