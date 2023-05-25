@@ -1,0 +1,22 @@
+export PYTHONUNBUFFERED='1'
+
+unset PJRT_DEVICE
+export XRT_TPU_CONFIG='localservice;0;localhost:51011'
+export MASTER_ADDR='localhost'
+export MASTER_PORT='12355'
+
+## see https://github.com/pytorch/xla/issues/4914
+export XLA_IR_SHAPE_CACHE_SIZE=12288
+
+## useful options for debug
+# export PT_XLA_DEBUG=1
+# export XLA_IR_DEBUG=0
+# export ACCELERATE_LOG_LEVEL='INFO'
+# export TRANSFORMERS_LOG_LEVEL='INFO'
+# export TF_CPP_MIN_LOG_LEVEL=0
+# export TF_CPP_LOG_THREAD_ID=1
+# export TF_CPP_VMODULE='tensor=4,computation_client=5,xrt_computation_client=5,aten_xla_type=5'
+
+## Limit to single TPU chip/core
+# export TPU_PROCESS_BOUNDS='1,1,1'
+# export TPU_VISIBLE_CHIPS=0

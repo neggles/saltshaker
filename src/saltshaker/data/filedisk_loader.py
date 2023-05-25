@@ -25,7 +25,7 @@ import saltshaker.shared as shared
 # all_files = [os.path.join(config["DATA_PATH"], filename) for filename in os.listdir(config["DATA_PATH"])]
 # all_latent_files = [instance for instance in all_files if instance.endswith(".latent")]
 # all_image_files = [
-#     instance for instance in all_files if instance.split(".")[-1] in shared.VALID_IMAGE_EXTENSIONS
+#     instance for instance in all_files if instance.split(".")[-1] in shared.IMAGE_EXTENSIONS
 # ]
 # all_caption_files = [instance for instance in all_files if instance.endswith(".txt")]
 # print(f"found {len(all_caption_files)} caption files.")

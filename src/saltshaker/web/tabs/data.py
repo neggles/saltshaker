@@ -23,7 +23,7 @@ def make_config(data_path, config_path, num_buckets, bucket_side_min, bucket_sid
     caption_files = []
     for file in os.listdir(data_path):
         ext = file.split(".")[-1]
-        if ext in shared.VALID_IMAGE_EXTENSIONS:
+        if ext in shared.IMAGE_EXTENSIONS:
             image_files.append(file.split(".")[0])
         elif ext == "txt":
             caption_files.append(file.split(".")[0])
@@ -43,7 +43,7 @@ def make_config(data_path, config_path, num_buckets, bucket_side_min, bucket_sid
     try:
         with open(config_path, "w") as f:
             json.dump(config, f)
-        return f"Wrote config to {config_path}"
+        return f"Wrote config to {config_path}", config
     except Exception as e:
         return f"Error: {e}"
 
@@ -121,7 +121,7 @@ def load():
                 label="Generated Config",
                 elem_id="generated_config",
                 interactive=False,
-            ).style(show_copy_button=True)
+            )
 
     # set event handlers
     generate_button.click(

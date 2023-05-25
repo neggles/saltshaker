@@ -7,7 +7,7 @@ import gradio as gr
 
 
 def execute(
-    model_path,
+    model_name_or_path,
     config_path,
     bucket_path,
     output_path,
@@ -43,7 +43,7 @@ def execute(
 ):
     config = json.load(open(config_path))
     commandline_arg = " finetune.py"
-    commandline_arg += f' --model="{model_path}"'
+    commandline_arg += f' --model="{model_name_or_path}"'
     commandline_arg += f' --run_name="{run_name}"'
     commandline_arg += f' --dataset="{bucket_path}"'
     commandline_arg += f" --lr={unet_lr}"
@@ -96,7 +96,7 @@ def execute(
 def load():
     gr.Markdown("Model")
     with gr.Row():
-        model_path = gr.Textbox(lines=1, label="Model Path", value="", interactive=True)
+        model_name_or_path = gr.Textbox(lines=1, label="Model Path", value="", interactive=True)
         config_path = gr.Textbox(lines=1, label="Config Path", value="train_config.json", interactive=True)
         bucket_path = gr.Textbox(lines=1, label="Bucket Path", value="buckets.pkl", interactive=True)
         output_path = gr.Textbox(lines=1, label="Output Path", value="my_finetune", interactive=True)
@@ -155,7 +155,7 @@ def load():
     start_button.click(
         execute,
         inputs=[
-            model_path,
+            model_name_or_path,
             config_path,
             bucket_path,
             output_path,

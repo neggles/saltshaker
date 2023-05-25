@@ -18,6 +18,7 @@ from accelerate import Accelerator
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
+    EMAModel,
     PNDMScheduler,
     StableDiffusionPipeline,
     UNet2DConditionModel,
@@ -29,8 +30,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
-from saltshaker.ema import EMAModel
-from saltshaker.shared import TrainerOpts
+from saltshaker.settings import TrainSettings
 
 
 class StableDiffusionTrainer:
@@ -46,7 +46,7 @@ class StableDiffusionTrainer:
         lr_scheduler: LambdaLR,
         optimizer: Optimizer,
         weight_dtype: torch.dtype,
-        config: TrainerOpts,
+        config: TrainSettings,
         ema: Optional[EMAModel] = None,
     ):
         self.accelerator = accelerator
@@ -122,7 +122,7 @@ class StableDiffusionTrainer:
             vae=self.vae,
             unet=unet,
             tokenizer=self.tokenizer,
-            scheduler=PNDMScheduler.from_pretrained(self.config.model_path, subfolder="scheduler"),
+            scheduler=PNDMScheduler.from_pretrained(self.config.model_name_or_path, subfolder="scheduler"),
             safety_checker=StableDiffusionSafetyChecker.from_pretrained(
                 "CompVis/stable-diffusion-safety-checker"
             ),
@@ -153,7 +153,7 @@ class StableDiffusionTrainer:
             unet=self.accelerator.unwrap_model(self.unet),
             tokenizer=self.tokenizer,
             scheduler=PNDMScheduler.from_pretrained(
-                self.config.model_path,
+                self.config.model_name_or_path,
                 subfolder="scheduler",
             ),
             safety_checker=fake_safety_checker,  # don't load the real safety checker to save memory
@@ -170,7 +170,7 @@ class StableDiffusionTrainer:
         del pipeline
         gc.collect()
 
-    def encode(self, captions):
+    def encode(self, captions) -> torch.Tensor:
         # id rather die than refactor this code
         if self.config.extended_mode_chunks < 2:
             max_length = self.tokenizer.model_max_length - 2
@@ -430,7 +430,7 @@ class StableDiffusionTrainer:
         noise_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         # Pew pew
-        if self.noise_scheduler.config.prediction_type == "epsilon":
+        if self.noise_scheduler.config["prediction_type"] == "epsilon":
             target = noise
         elif self.noise_scheduler.config.prediction_type == "v_prediction":
             target = self.noise_scheduler.get_velocity(latents, noise, timesteps)
@@ -526,12 +526,12 @@ class StableDiffusionTrainer:
                     self.save_checkpoint()
 
                 if not (self.global_step % self.config.sample_steps):
-                    if self.config.sample_prompt is None or self.config.sample_prompt == "":
+                    if self.config.validation_prompts is None or self.config.validation_prompts == "":
                         prompt = batch["captions"][random.randint(0, len(batch["captions"]) - 1)]
-                        if len(prompt) == 0 and self.config.uncond_sample_prompt:
-                            prompt = self.config.uncond_sample_prompt
+                        if len(prompt) == 0 and self.config.uncond_validation_prompts:
+                            prompt = self.config.uncond_validation_prompts
                     else:
-                        prompt = self.config.sample_prompt
+                        prompt = self.config.validation_prompts
                     self.sample(prompt)
 
                 self.accelerator.log(self.logs)

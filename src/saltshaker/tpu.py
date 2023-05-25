@@ -16,6 +16,7 @@ import typer
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
+    EMAModel,
     UNet2DConditionModel,
 )
 from diffusers.optimization import get_scheduler
@@ -23,18 +24,19 @@ from torch.utils.data import DataLoader
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from saltshaker.data.filedisk_loader import AspectBucket, AspectBucketSampler, AspectDataset
-from saltshaker.ema import EMAModel
-from saltshaker.shared import TrainerOpts
+from saltshaker.settings import TrainSettings
 from saltshaker.trainer import StableDiffusionTrainer, get_cosine_restart_scheduler_scaled
 
 try:
     import torch_xla
     import torch_xla.core.xla_model as xm
+    from torch_xla.amp.syncfree import Adam, AdamW
 except ImportError:
-    print("TPU support has been disabled, please install torch_xla and train on an XLA device")
     torch_xla = None
     xm = None
+    from torch.optim import Adam, AdamW
 
+# Turn this off to avoid warnings about TypedStorage being deprecated, which we can't do anything about
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 if accelerate.utils.is_rich_available():
@@ -89,13 +91,13 @@ def collate_fn(examples):
     return return_dict
 
 
-def main(config: TrainerOpts) -> None:
+def main(config: TrainSettings) -> None:
     if config.hf_token is None:
         config.hf_token = getenv("HF_TOKEN", None)
     if config.hf_token is None:
         raise ValueError("You need to supply a HuggingFace token via --hf-token or HF_TOKEN env variable")
 
-    config.dataset_path = Path(config.dataset_path)
+    config.dataset_name_or_path = Path(config.dataset_name_or_path)
     config.output_path = Path(config.output_path)
 
     # Set up debug logging as early as possible
@@ -129,23 +131,23 @@ def main(config: TrainerOpts) -> None:
     accelerator.print("TORCH:", torch.__version__)
     accelerator.print("TRANSFORMERS:", transformers.__version__)
     accelerator.print("DIFFUSERS:", diffusers.__version__)
-    accelerator.print("MODEL:", config.model_path)
+    accelerator.print("MODEL:", config.model_name_or_path)
     accelerator.print("MIXED PRECISION:", config.mixed_precision)
     accelerator.print("RANDOM SEED:", config.seed)
 
     # load tokenizer and text encoder
     with accelerator.main_process_first():
         tokenizer = CLIPTokenizer.from_pretrained(
-            config.model_path, subfolder="tokenizer", use_auth_token=config.hf_token
+            config.model_name_or_path, subfolder="tokenizer", use_auth_token=config.hf_token
         )
         text_encoder = CLIPTextModel.from_pretrained(
-            config.model_path, subfolder="text_encoder", use_auth_token=config.hf_token
+            config.model_name_or_path, subfolder="text_encoder", use_auth_token=config.hf_token
         )
 
         # load VAE
         if config.vae is None:
             vae = AutoencoderKL.from_pretrained(
-                config.model_path, subfolder="vae", use_auth_token=config.hf_token
+                config.model_name_or_path, subfolder="vae", use_auth_token=config.hf_token
             )
         else:
             vae = AutoencoderKL.from_pretrained(config.vae, use_auth_token=config.hf_token)
@@ -153,7 +155,7 @@ def main(config: TrainerOpts) -> None:
 
         # load unet
         unet = UNet2DConditionModel.from_pretrained(
-            config.model_path, subfolder="unet", use_auth_token=config.hf_token
+            config.model_name_or_path, subfolder="unet", use_auth_token=config.hf_token
         )
 
         # Freeze vae and (maybe) text_encoder
@@ -170,7 +172,7 @@ def main(config: TrainerOpts) -> None:
         else:
             opt_params = unet.parameters()
 
-        optimizer = torch.optim.AdamW(
+        optimizer = AdamW(
             opt_params,
             lr=config.lr,
             betas=(config.adam_beta1, config.adam_beta2),
@@ -180,11 +182,11 @@ def main(config: TrainerOpts) -> None:
 
         # load scheduler
         noise_scheduler = DDPMScheduler.from_pretrained(
-            config.model_path, subfolder="scheduler", use_auth_token=config.hf_token
+            config.model_name_or_path, subfolder="scheduler", use_auth_token=config.hf_token
         )
 
     with accelerator.main_process_first():
-        with config.dataset_path.open() as f:
+        with config.dataset_name_or_path.open() as f:
             bucket: AspectBucket = pickle.load(f)
 
         dataset = AspectDataset(bucket)
@@ -268,12 +270,12 @@ def cli(
     config_path: Path = typer.Argument(..., exists=True, dir_okay=False),
 ):
     config_dict = json.loads(config_path.read_text())
-    config = TrainerOpts.parse_obj(config_dict)
+    config = TrainSettings.parse_obj(config_dict)
 
     main(config)
 
 
 if __name__ == "__main__":
-    config = TrainerOpts()
+    config = TrainSettings()
 
     main(config)

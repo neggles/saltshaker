@@ -58,7 +58,7 @@ def encode(model, buckets, config, progress):
             image_id = bucket.store.image_files[image_index][1]
             image_file_name = None
             latent_name = os.path.join(config["DATA_PATH"], image_id + ".latent")
-            for ext in shared.VALID_IMAGE_EXTENSIONS:
+            for ext in shared.IMAGE_EXTENSIONS:
                 image_file_name = os.path.join(config["DATA_PATH"], image_id + "." + ext)
                 if os.path.isfile(image_file_name):
                     break
