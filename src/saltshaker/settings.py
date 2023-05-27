@@ -121,13 +121,20 @@ class TrainSettings(BaseSettings):
     debug: bool = False
 
 
-class BucketSettings(BaseModel):
+class AspectBucketInfo(BaseModel):
     buckets: List[Tuple[int, int]] = Field(...)
     ratios: List[float] = Field(...)
 
     def __iter__(self) -> Generator[Tuple[int, int, float], Any, None]:
         for bucket, ratio in zip(self.buckets, self.ratios):
             yield bucket[0], bucket[1], ratio
+
+
+class BucketSettings(BaseModel):
+    num_buckets: int = 32
+    bucket_side_min: int = 256
+    bucket_side_max: int = 768 * 2
+    bucket_max_area: int = 768 * 768
 
 
 class AdamSettings(BaseModel):
@@ -151,7 +158,7 @@ class Settings(BaseSettings):
     # Project config
     project_name: str = "saltshaker"
     project_dir: Path = Field(...)
-    project_trackers: List[str] = ["wandb"]
+    log_with: List[str] = ["wandb"]
     cache_dir: Optional[Path] = None  # defaults to HF cache dir
     output_dir: Optional[Path] = None  # defaults to project_dir / "output"
     # optionally sync model checkpoints to HF hub
@@ -181,7 +188,11 @@ class Settings(BaseSettings):
     image_column: str = "image"
     caption_column: str = "caption"
     flip: bool = Field(False, description="Randomly flip some images horizontally")
-    aspect: BucketSettings = Field(...)
+    aspect: AspectBucketInfo = Field(...)
+    shuffle_tags: bool = Field(True, description="Shuffle tags for each image")
+    keep_tags: int = Field(0, description="Keep this many tags per image unshuffled")
+    clip_penultimate: bool = Field(False, description="Clip the penultimate layer of the text encoder")
+    extended_mode_chunks: int = 0
 
     # Training config
     epochs: int = 10
@@ -193,13 +204,15 @@ class Settings(BaseSettings):
     max_grad_norm: float = Field(1.0, description="Max gradient norm for gradient clipping")
 
     unet_lr: float = Field(1e-5, description="Learning rate for UNet")
-    train_te: bool = Field(False, description="Whether to train the Text Encoder")
-    te_lr: float = Field(7e-9, description="Learning rate for TE")
+    train_text_encoder: bool = Field(False, description="Whether to train the Text Encoder")
+    text_encoder_lr: float = Field(7e-9, description="Learning rate for TE")
     scheduler: SchedulerSettings = Field(..., description="Learning rate scheduler")
     optimizer: AdamSettings = Field(..., description="AdamW optimizer settings")
 
     max_train_samples: int = Field(-1, description="Cut off training after this many samples (-1 = no limit)")
     validation_prompts: List[str] = Field([], description="Prompts to use for validation")
+    validation_steps: int = Field(1000, description="Run validation every N steps")
+    validation_epochs: int = Field(1, description="Run validation every N epochs")
 
     # saving and logging
     checkpoint_steps: int = Field(500, description="Save state checkpoint every N steps")

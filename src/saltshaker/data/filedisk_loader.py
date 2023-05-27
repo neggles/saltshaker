@@ -247,6 +247,7 @@ class AspectDataset(torch.utils.data.Dataset):
     def __init__(
         self, datadir: Path, bucket: AspectBucket, ucg: float = 0.1, shuffle_after_n_captions: int = 0
     ):
+        self.datadir = datadir
         self.ucg = ucg
         self.data_source_name = StringArray(map(lambda x: x[0], bucket.store.image_files))
         self.data_source_id = StringArray(map(lambda x: x[1], bucket.store.image_files))
