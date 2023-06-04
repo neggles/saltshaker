@@ -1,5 +1,5 @@
 import gc
-from typing import Iterable, Optional
+from typing import Iterable
 
 import torch
 
@@ -53,17 +53,18 @@ class EMAModel:
         for s_param, param in zip(self.shadow_params, parameters):
             param.data.copy_(s_param.data)
 
-    def store(self, parameters: Optional[Iterable[torch.nn.Parameter]] = None) -> None:
+    # From CompVis LitEMA implementation
+    def store(self, parameters: Iterable[torch.nn.Parameter]) -> None:
         """
         Save the current parameters for restoring later.
         Args:
-            parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
                 temporarily stored. If `None`, the parameters of with which this
                 `ExponentialMovingAverage` was initialized will be used.
         """
         self.collected_params = [param.clone() for param in parameters]
 
-    def restore(self, parameters: Optional[Iterable[torch.nn.Parameter]] = None) -> None:
+    def restore(self, parameters: Iterable[torch.nn.Parameter]) -> None:
         """
         Restore the parameters stored with the `store` method.
         Useful to validate the model with EMA parameters without affecting the
@@ -72,9 +73,7 @@ class EMAModel:
         restore the former parameters.
         Args:
             parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-                updated with the stored parameters. If `None`, the
-                parameters with which this `ExponentialMovingAverage` was
-                initialized will be used.
+            updated with the stored parameters.
         """
         for c_param, param in zip(self.collected_params, parameters):
             param.data.copy_(c_param.data)
