@@ -65,7 +65,14 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    config_path: Path = typer.Argument(..., exists=True, dir_okay=False, help="Path to config file"),
+    config_path: Path = typer.Option(
+        "./data/config.json",
+        "-c",
+        "--config",
+        exists=True,
+        dir_okay=False,
+        help="Path to JSON config file. Will be created if it does not exist.",
+    ),
 ):
     settings: Settings = get_settings(config_path)
 

@@ -5,11 +5,13 @@ from typing import NoReturn, Optional
 import typer
 
 from saltshaker import __version__, console, web
+from saltshaker.finetune import main as finetune
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
+app.add_typer(finetune, name="finetune")
 
 
 def version_callback(value: bool) -> None:
@@ -25,29 +27,6 @@ def callback(
     ),
 ) -> None:
     pass
-
-
-@app.command()
-def train(
-    verbose: bool = typer.Option(
-        False, "-v", "--verbose", is_flag=True, help="Enable verbose console output."
-    ),
-    config_path: Path = typer.Option(
-        "./data/config.json",
-        "-c",
-        "--config",
-        exists=True,
-        dir_okay=False,
-        help="Path to JSON config file. Will be created if it does not exist.",
-    ),
-) -> NoReturn:
-    """
-    Main entrypoint for your application.
-    """
-    console.log(f"verbose: {verbose}")
-    console.log(f"config file path: {config_path}")
-    console.log("done")
-    sys.exit(0)
 
 
 @app.command()
