@@ -1,5 +1,6 @@
 import gc
 import itertools
+import math
 import time
 from typing import Optional
 
@@ -288,3 +289,34 @@ class StableDiffusionTrainer(nn.Module):
             self.ema_model.step(self.unet.parameters())
 
         return loss
+
+
+# get_cosine_with_hard_restarts_schedule_with_warmup_and_scaling
+def get_cosine_restart_scheduler_scaled(
+    optimizer: Optimizer,
+    num_warmup_steps: int,
+    num_training_steps: int,
+    num_cycles: float = 1,
+    last_epoch: int = -1,
+    max_scale: float = 1.0,
+    min_scale: float = 0.0,
+) -> LambdaLR:
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(
+            max(1, num_training_steps - num_warmup_steps)
+        )
+        if progress >= 1.0:
+            return 0.0
+        return max(
+            0.0,
+            0.5
+            * (
+                max_scale
+                + min_scale
+                + (max_scale - min_scale) * math.cos(math.pi * ((float(num_cycles) * progress) % 1.0))
+            ),
+        )
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)

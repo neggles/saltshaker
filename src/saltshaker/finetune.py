@@ -1,13 +1,9 @@
-import json
 import logging
-import pickle
-import random
 import socket
 import warnings
-from os import PathLike, getenv
 from pathlib import Path
 from sys import version_info
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List
 
 import accelerate
 import datasets
@@ -17,9 +13,7 @@ import transformers
 import typer
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from accelerate.state import AcceleratorState
 from accelerate.utils import ProjectConfiguration, set_seed
-from datasets import load_dataset
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
@@ -28,14 +22,11 @@ from diffusers import (
 )
 from diffusers.optimization import get_scheduler
 from huggingface_hub import create_repo
-from numpy import isin
-from regex import subf
 from torch.utils.data import DataLoader
-from transformers import CLIPTextModel, CLIPTokenizer, CLIPTokenizerFast
+from transformers import CLIPTextModel, CLIPTokenizerFast
 
 from saltshaker.data.dataset import AspectBucketDataset, AspectDatasetSampler
-from saltshaker.settings import Settings, TrainSettings, get_settings
-from saltshaker.shared import IMAGE_EXTENSIONS
+from saltshaker.settings import Settings, get_settings
 from saltshaker.trainer import StableDiffusionTrainer, get_cosine_restart_scheduler_scaled
 
 try:
