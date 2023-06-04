@@ -65,62 +65,6 @@ class JsonConfig(BaseConfig):
         )
 
 
-class TrainSettings(BaseSettings):
-    model_name_or_path: Union[str, PathLike] = Field(...)
-    revision: Optional[str] = None
-    dataset_name_or_path: Union[str, PathLike] = Field(...)
-    vae: Optional[str] = None
-    run_name: str = "stable_diffusion"
-    output_path: Path = Field(...)
-    use_wandb: bool = False
-    hf_token: Optional[str] = None
-
-    save_steps: int = 1000
-    resume_steps: int = -1
-    shuffle: bool = True
-    reshuffle_tags: bool = False
-    chunked_tag_shuffle: int = 0
-
-    sample_steps: int = 200
-    sample_count: int = 4
-    validation_prompts: Optional[List[str]] = None
-    uncond_validation_prompts: Optional[List[str]] = None
-
-    epochs: int = 10
-    seed: int = 42
-    batch_size: int = 1
-    use_ema: bool = False
-    ucg: float = 0.1
-    partial_dropout: bool = True
-
-    mixed_precision: str = "no"
-    enable_tf32: bool = True
-    gradient_checkpointing: bool = False
-    gradient_accumulation_steps: int = 1
-
-    use_8bit_adam: bool = False
-    adam_beta1: float = 0.9
-    adam_beta2: float = 0.999
-    adam_weight_decay: float = 1e-2
-    adam_epsilon: float = 1e-8
-
-    lr: float = 5e-7
-    lr_scheduler: str = "constant"
-    lr_warmup_steps: int = 0
-    lr_num_cycles: int = 1
-    lr_min_scale: float = 0.0
-    lr_max_scale: float = 1.0
-
-    train_te: bool = False
-    te_lr: float = 7e-9
-    extended_mode_chunks: int = 0
-    clip_penultimate: bool = False
-    log_loss_ema: bool = False
-
-    xformers: bool = False
-    debug: bool = False
-
-
 class AspectBucketInfo(BaseModel):
     buckets: List[Tuple[int, int]] = Field(...)
     ratios: List[float] = Field(...)
@@ -138,19 +82,19 @@ class BucketSettings(BaseModel):
 
 
 class AdamSettings(BaseModel):
-    use_8bit: bool = Field(False)
-    beta1: float = Field(0.9)
-    beta2: float = Field(0.999)
-    epsilon: float = Field(1e-8)
-    weight_decay: float = Field(1e-2)
+    use_8bit: bool = Field(False, description="Use 8-bit Adam (CUDA only)")
+    beta1: float = Field(0.9, description="Adam beta1")
+    beta2: float = Field(0.999, description="Adam beta2")
+    weight_decay: float = Field(1e-2, description="Adam weight decay")
+    epsilon: float = Field(1e-8, description="Adam epsilon")
 
 
 class SchedulerSettings(BaseModel):
     type: str = Field("constant")
-    warmup_steps: int = Field(0)
-    num_cycles: int = Field(1)
-    min_scale: float = Field(0.0)
-    max_scale: float = Field(1.0)
+    warmup_steps: float = Field(0.1, description="Fraction of total steps to warmup for (percentage)")
+    num_cycles: int = Field(1, description="Number of restart cycles for cosine scheduler")
+    min_scale: float = Field(0.0, description="Minimum learning rate scale")
+    max_scale: float = Field(1.0, description="Maximum learning rate scale")
     auto_scale: bool = Field(False, description="Auto-scale the learning rate by the number of workers")
 
 
@@ -171,6 +115,7 @@ class Settings(BaseSettings):
     use_tpu: bool = False
     downcast_bf16: bool = False
     local_rank: int = -1
+    xformers: bool = Field(False, description="Use XFormers memory-efficient attention. GPU only")
 
     # Model config
     model_name_or_path: Union[Path, str] = Field(...)
@@ -192,7 +137,11 @@ class Settings(BaseSettings):
     shuffle_tags: bool = Field(True, description="Shuffle tags for each image")
     keep_tags: int = Field(0, description="Keep this many tags per image unshuffled")
     clip_penultimate: bool = Field(False, description="Clip the penultimate layer of the text encoder")
-    extended_mode_chunks: int = 0
+    extended_mode_chunks: int = Field(
+        0,
+        description="Enables tokenizer extended mode with N max 75-token chunks (<2 disables)",
+    )
+    ucg: float = Field(0.1, description="Percentage chance of dropping out the text condition per batch.")
 
     # Training config
     epochs: int = 10
