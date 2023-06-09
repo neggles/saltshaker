@@ -54,8 +54,8 @@ logger = get_logger(__name__, log_level="INFO")
 app = typer.Typer()
 
 
-@app.command()
-def main(
+@app.callback(invoke_without_command=True)
+def callback(
     config_path: Path = typer.Option(
         "./data/config.json",
         "-c",
@@ -65,7 +65,12 @@ def main(
         help="Path to JSON config file. Will be created if it does not exist.",
     ),
 ):
-    settings: Settings = get_settings(config_path)
+    return main(config_path=config_path)
+
+
+@app.command()
+def main():
+    settings: Settings = get_settings("./data/config.json")
 
     if settings.dataset_name is None and settings.train_data_dir is None:
         raise ValueError("Either dataset_name or train_data_dir must be set in config")
@@ -73,13 +78,14 @@ def main(
     project_config = ProjectConfiguration(
         project_dir=settings.project_dir,
         total_limit=settings.checkpoint_limit,
+        automatic_checkpoint_naming=True,
     )
     accelerator = Accelerator(
         gradient_accumulation_steps=settings.gradient_accumulation_steps,
         mixed_precision=settings.mixed_precision,
         log_with=settings.log_with,
         project_config=project_config,
-        downcast_bf16=settings.downcast_bf16,
+        device_placement=True,
     )
 
     # Make one log on every process with the configuration for debugging.
@@ -109,7 +115,7 @@ def main(
                 f"Is local main: {accelerator.is_local_main_process}",
                 "------------------------------------------------",
                 "Version table:",
-                f"  Python: {version_info}",
+                f"  Python: {version_info.major}.{version_info.minor}.{version_info.micro}-{version_info.releaselevel}",
                 f"  PyTorch: {torch.__version__}",
                 f"  Accelerate: {accelerate.__version__}",
                 f"  Transformers: {transformers.__version__}",
@@ -131,6 +137,14 @@ def main(
     if not accelerator.is_local_main_process:
         logger.info(accelerator.state, main_process_only=False),
 
+    # For mixed precision training we cast the text_encoder and vae weights to half-precision
+    # as these models are only used for inference, keeping weights in full precision is not required.
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+
     # Set seed before initializing model.
     if settings.seed is not None:
         logger.info(f"Setting seed: {settings.seed}")
@@ -149,7 +163,6 @@ def main(
             ).repo_id
 
     # Load on main process first so we don't download the files multiple times
-
     with accelerator.main_process_first():
         # Load the noise scheduler
         logger.info("Loading noise scheduler")
@@ -349,31 +362,38 @@ def main(
 
     # create dataset
     logger.info("Creating AspectBucketDataset from raw dataset")
-    train_dataset = AspectBucketDataset(
-        dataset=dataset,
-        settings=settings,
-        caption_column=caption_column,
-        image_column=image_column,
-    )
-    train_sampler = AspectDatasetSampler(dataset=train_dataset)
+    with accelerator.main_process_first():
+        train_dataset = AspectBucketDataset(
+            dataset=dataset,
+            tokenizer=tokenizer,
+            text_encoder=text_encoder,
+            accelerator=accelerator,
+            settings=settings,
+        )
+
+    train_sampler = AspectDatasetSampler(dataset=train_dataset, num_replicas=accelerator.num_processes)
+    total_train_batch_size = settings.batch_size * settings.gradient_accumulation_steps
 
     logger.info("Creating dataloader")
     train_dataloader = DataLoader(
         dataset=train_dataset,
         sampler=train_sampler,
-        batch_size=settings.batch_size,
+        batch_size=total_train_batch_size,
         num_workers=settings.dataloader_num_workers,
         collate_fn=train_dataset.collate_fn,
     )
+    num_training_steps = settings.epochs * len(train_dataloader)
+    total_cycles = settings.scheduler.num_cycles * settings.epochs
+    logger.info(f"Total training steps: {num_training_steps}")
 
     # set up the scheduler
-    if settings.scheduler.type == "cosine_with_restarts":
-        logger.info("Using cosine with restarts scheduler")
+    if settings.scheduler.type == "cosine_with_hard_restarts":
+        logger.info("Using cosine with hard restarts scheduler")
         lr_scheduler = get_cosine_restart_scheduler_scaled(
             optimizer=optimizer,
             num_warmup_steps=settings.scheduler.warmup_steps,
-            num_training_steps=settings.epochs * len(train_dataloader),
-            num_cycles=settings.scheduler.num_cycles,
+            num_training_steps=num_training_steps,
+            num_cycles=total_cycles,
             max_scale=settings.scheduler.max_scale,
             min_scale=settings.scheduler.min_scale,
         )
@@ -383,22 +403,26 @@ def main(
             settings.scheduler.type,
             optimizer=optimizer,
             num_warmup_steps=settings.scheduler.warmup_steps,
-            num_training_steps=settings.epochs * len(train_dataloader),
+            num_training_steps=num_training_steps,
+            num_cycles=total_cycles if total_cycles > 0 else 1,
         )
+    if "restart" in settings.scheduler.type:
+        logger.info(f"Total LR cycles: {total_cycles}")
 
     # Now we feed shit into the Accelerator to prepare it...
     logger.info("Preparing models, optimizer, dataloader, scheduler for distributed training...")
     if settings.train_text_encoder:
-        unet, optimizer, text_encoder, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, optimizer, text_encoder, train_dataloader, lr_scheduler
+        unet, vae, optimizer, text_encoder, lr_scheduler = accelerator.prepare(
+            unet, vae, optimizer, text_encoder, lr_scheduler
         )
     else:
-        unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, optimizer, train_dataloader, lr_scheduler
-        )
+        unet, vae, optimizer, lr_scheduler = accelerator.prepare(unet, vae, optimizer, lr_scheduler)
+
+    # prep separately
+    train_dataloader = accelerator.prepare_data_loader(data_loader=train_dataloader, device_placement=True)
 
     # Initialize trackers
-    logger.info("Ready to create trainer, waiting for all processes so we can print debug info...")
+    logger.info("Ready to create trainer, synchronizing...")
     accelerator.wait_for_everyone()
     if accelerator.distributed_type == accelerate.DistributedType.TPU:
         proc_idx = accelerator.process_index + 1
@@ -422,7 +446,6 @@ def main(
 
     # create trainer
     logger.info("Creating trainer")
-    weight_dtype = torch.float16 if settings.mixed_precision == "fp16" else torch.float32
     trainer = StableDiffusionTrainer(
         accelerator=accelerator,
         unet=unet,
@@ -435,11 +458,11 @@ def main(
         optimizer=optimizer,
         weight_dtype=weight_dtype,
         settings=settings,
-        ema=ema_unet if settings.use_ema else None,
+        ema_model=ema_unet if settings.use_ema else None,
     )
 
     logger.info("Initializing trackers")
-    accelerator.init_trackers(config=settings)
+    accelerator.init_trackers(project_name=settings.project_name, config=settings)
 
     # do the thing
     logger.info("Ready to start! Waiting for all processes to be ready...")
@@ -450,3 +473,7 @@ def main(
     accelerator.end_training()
 
     pass
+
+
+if __name__ == "__main__":
+    app()

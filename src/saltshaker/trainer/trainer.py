@@ -4,6 +4,7 @@ import math
 import time
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import tqdm
@@ -17,6 +18,7 @@ from diffusers import (
     StableDiffusionPipeline,
     UNet2DConditionModel,
 )
+from diffusers.optimization import get_cosine_with_hard_restarts_schedule_with_warmup, get_scheduler
 from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
@@ -24,6 +26,14 @@ from torch.utils.data import DataLoader
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from saltshaker.settings import Settings
+
+try:
+    import torch_xla
+    import torch_xla.core.xla_model as xm
+    import torch_xla.debug.metrics as met
+except ImportError:
+    torch_xla = None
+    xm = None
 
 logger = get_logger(__name__, log_level="INFO")
 
@@ -41,7 +51,6 @@ class StableDiffusionTrainer(nn.Module):
         lr_scheduler: LambdaLR,
         optimizer: Optimizer,
         weight_dtype: torch.dtype,
-        max_train_steps: int,
         settings: Settings,
         ema_model: Optional[EMAModel] = None,
     ) -> None:
@@ -56,9 +65,15 @@ class StableDiffusionTrainer(nn.Module):
         self.lr_scheduler = lr_scheduler
         self.optimizer = optimizer
         self.weight_dtype = weight_dtype
-        self.max_train_steps = max_train_steps
+
         self.settings = settings
         self.ema_model = ema_model
+
+        self.max_train_steps = settings.max_train_samples // settings.batch_size
+        self.train_text_encoder = settings.train_text_encoder
+        self.extended_mode_chunks = settings.extended_mode_chunks
+        self.clip_penultimate = settings.clip_penultimate
+        self.device = accelerator.device
 
         # Set some flags
         self._use_ema = self.ema_model is not None
@@ -81,6 +96,11 @@ class StableDiffusionTrainer(nn.Module):
     def progress_text(self, val: dict, **kwargs) -> None:
         if self.accelerator.is_main_process:
             self.progress.set_postfix(val, **kwargs)
+        if met is not None:
+            logger.info(met.short_metrics_report())
+            self.settings.output_dir.joinpath(f"metrics-{self.global_step}.txt").write_text(
+                met.metrics_report()
+            )
 
     def progress_step(self, val: int = 1) -> None:
         if self.accelerator.is_main_process:
@@ -89,9 +109,7 @@ class StableDiffusionTrainer(nn.Module):
     def save_pipeline(self):
         unet = self.accelerator.unwrap_model(self.unet)
         text_encoder = (
-            self.accelerator.unwrap_model(self.text_encoder)
-            if self.settings.train_text_encoder
-            else self.text_encoder
+            self.accelerator.unwrap_model(self.text_encoder) if self.train_text_encoder else self.text_encoder
         )
         if self.settings.use_ema:
             self.ema_model.store(unet.parameters())
@@ -119,6 +137,118 @@ class StableDiffusionTrainer(nn.Module):
             self.ema_model.restore(unet.parameters())
         del pipeline
         gc.collect()
+
+    def encode_text(self, examples):
+        input_ids = [x for x in examples["tokens"]]
+
+        if self.extended_mode_chunks < 2:
+            for i, x in enumerate(input_ids):
+                for j, y in enumerate(x):
+                    input_ids[i][j] = [
+                        self.tokenizer.bos_token_id,
+                        *y,
+                        *np.full((self.tokenizer.model_max_length - len(y) - 1), self.tokenizer.eos_token_id),
+                    ]
+
+            if self.clip_penultimate:
+                input_ids = [
+                    self.text_encoder.text_model.final_layer_norm(
+                        self.text_encoder(
+                            torch.asarray(input_id).to(self.device),
+                            output_hidden_states=True,
+                        )["hidden_states"][-2]
+                    )[0]
+                    for input_id in input_ids
+                ]
+            else:
+                input_ids = [
+                    self.text_encoder(
+                        torch.asarray(input_id).to(self.device),
+                        output_hidden_states=True,
+                    ).last_hidden_state[0]
+                    for input_id in input_ids
+                ]
+        else:
+            max_length = self.tokenizer.model_max_length
+            max_standard_tokens = max_length - 2
+            max_chunks = self.extended_mode_chunks
+            max_len = (
+                np.ceil(max(len(x) for x in input_ids) / max_standard_tokens).astype(int).item()
+                * max_standard_tokens
+            )
+            if max_len > max_standard_tokens:
+                z = None
+                for i, x in enumerate(input_ids):
+                    if len(x) < max_len:
+                        input_ids[i] = [*x, *np.full((max_len - len(x)), self.tokenizer.eos_token_id)]
+                batch_t = torch.tensor(input_ids)
+                chunks = [
+                    batch_t[:, i : i + max_standard_tokens] for i in range(0, max_len, max_standard_tokens)
+                ]
+                for chunk in chunks:
+                    chunk = torch.cat(
+                        (
+                            torch.full((chunk.shape[0], 1), self.tokenizer.bos_token_id),
+                            chunk,
+                            torch.full((chunk.shape[0], 1), self.tokenizer.eos_token_id),
+                        ),
+                        1,
+                    )
+                    if z is None:
+                        if self.clip_penultimate:
+                            z = self.text_encoder.text_model.final_layer_norm(
+                                self.text_encoder(chunk.to(self.device), output_hidden_states=True)[
+                                    "hidden_states"
+                                ][-2]
+                            )
+                        else:
+                            z = self.text_encoder(
+                                chunk.to(self.device), output_hidden_states=True
+                            ).last_hidden_state
+                    else:
+                        if self.clip_penultimate:
+                            z = torch.cat(
+                                (
+                                    z,
+                                    self.text_encoder.text_model.final_layer_norm(
+                                        self.text_encoder(chunk.to(self.device), output_hidden_states=True)[
+                                            "hidden_states"
+                                        ][-2]
+                                    ),
+                                ),
+                                dim=-2,
+                            )
+                        else:
+                            z = torch.cat(
+                                (
+                                    z,
+                                    self.text_encoder(
+                                        chunk.to(self.device), output_hidden_states=True
+                                    ).last_hidden_state,
+                                ),
+                                dim=-2,
+                            )
+                input_ids = z
+            else:
+                for i, x in enumerate(input_ids):
+                    input_ids[i] = [
+                        self.tokenizer.bos_token_id,
+                        *x,
+                        *np.full((self.tokenizer.model_max_length - len(x) - 1), self.tokenizer.eos_token_id),
+                    ]
+                if self.clip_penultimate:
+                    input_ids = self.text_encoder.text_model.final_layer_norm(
+                        self.text_encoder(
+                            torch.asarray(input_ids).to(self.device), output_hidden_states=True
+                        )["hidden_states"][-2]
+                    )
+                else:
+                    input_ids = self.text_encoder(
+                        torch.asarray(input_ids).to(self.device), output_hidden_states=True
+                    ).last_hidden_state
+
+        input_ids = torch.stack(tuple(input_ids))
+        return input_ids
 
     def compute_snr(self, timesteps: Tensor) -> Tensor:
         """
@@ -149,7 +279,7 @@ class StableDiffusionTrainer(nn.Module):
     def backprop(self, loss):
         self.accelerator.backward(loss)
         if self.accelerator.sync_gradients:
-            if self.settings.train_text_encoder:
+            if self.train_text_encoder:
                 self.accelerator.clip_grad_norm_(
                     itertools.chain(self.unet.parameters(), self.text_encoder.parameters()), 0.7071
                 )
@@ -162,7 +292,7 @@ class StableDiffusionTrainer(nn.Module):
     def train(self):
         for epoch in range(self.first_epoch, self.settings.epochs):
             self.unet.train()
-            if self.settings.train_text_encoder:
+            if self.train_text_encoder:
                 self.text_encoder.train()
             for num, batch in enumerate(self.train_dataloader):
                 if (
@@ -173,39 +303,51 @@ class StableDiffusionTrainer(nn.Module):
                     self.global_step += 1
                     continue
 
-                # do the step and measure execution time
-                b_start = time.perf_counter()
-                loss = self.train_step(batch)
-                b_end = time.perf_counter()
+                with self.accelerator.autocast():
+                    # do the step and measure execution time
+                    b_start = time.perf_counter()
+                    with self.accelerator.accumulate(self.unet):
+                        if self.train_text_encoder:
+                            with self.accelerator.accumulate(self.text_encoder):
+                                loss = self.train_step(batch)
+                        else:
+                            loss = self.train_step(batch)
+                    b_end = time.perf_counter()
 
-                # compute metrics
-                seconds_per_step = b_end - b_start
-                steps_per_second = 1 / seconds_per_step
-                rank_images_per_second = self.settings.batch_size * steps_per_second
-                world_images_per_second = rank_images_per_second * self.accelerator.num_processes
-                samples_seen = self.global_step * self.settings.batch_size * self.accelerator.num_processes
+                    if self._use_ema:
+                        self.ema_model.step(self.unet.parameters())
 
-                # log metrics
-                train_loss = self.accelerator.gather_for_metrics(loss)
-                train_loss = train_loss.mean() / self.accelerator.gradient_accumulation_steps
-                train_lr = self.lr_scheduler.get_last_lr()
-                metrics = {
-                    "train/loss": train_loss,
-                    "train/lr": train_lr[0],
-                    "train/epoch": epoch,
-                    "train/step": self.global_step,
-                    "train/samples_seen": samples_seen,
-                    "perf/rank_sps": rank_images_per_second,
-                    "perf/world_sps": world_images_per_second,
-                }
-                if len(train_lr) > 1:  # means we're training the text encoder
-                    metrics["train/te_lr"] = train_lr[1]
+                    if self.accelerator.sync_gradients:
+                        # compute metrics
+                        seconds_per_step = b_end - b_start
+                        steps_per_second = 1 / seconds_per_step
+                        rank_images_per_second = self.settings.batch_size * steps_per_second
+                        world_images_per_second = rank_images_per_second * self.accelerator.num_processes
+                        samples_seen = (
+                            self.global_step * self.settings.batch_size * self.accelerator.num_processes
+                        )
 
-                # update progress bar and global step
-                self.progress_step()
-                self.global_step += 1
-                self.progress_text(metrics)
-                self.accelerator.log(metrics, step=self.global_step)
+                        # log metrics
+                        train_loss = self.accelerator.gather_for_metrics(loss)
+                        train_loss = train_loss.mean() / self.accelerator.gradient_accumulation_steps
+                        train_lr = self.lr_scheduler.get_last_lr()
+                        metrics = {
+                            "train/loss": train_loss,
+                            "train/lr": train_lr[0],
+                            "train/epoch": epoch,
+                            "train/step": self.global_step,
+                            "train/samples_seen": samples_seen,
+                            "perf/rank_sps": rank_images_per_second,
+                            "perf/world_sps": world_images_per_second,
+                        }
+                        if len(train_lr) > 1:  # means we're training the text encoder
+                            metrics["train/te_lr"] = train_lr[1]
+
+                        # update progress bar and global step
+                        self.progress_step()
+                        self.global_step += 1
+                        self.progress_text(metrics)
+                        self.accelerator.log(metrics, step=self.global_step)
 
                 # save checkpoint if needed
                 if not (self.global_step % self.settings.checkpoint_steps):
@@ -229,16 +371,17 @@ class StableDiffusionTrainer(nn.Module):
 
     def train_step(self, batch: Tensor) -> Tensor:
         # make latents out of the images
-        latents = self.vae.encode(
-            batch["pixel_values"].to(self.vae.device, self.vae.dtype)
-        ).latent_dist.sample()
+        pixel_values = batch["pixel_values"]
+        latents = self.vae.encode(pixel_values).latent_dist.sample()
         latents = latents.mul(0.18215)
 
         # Sample noise
         noise = torch.randn_like(latents)
         bsz = latents.shape[0]
         # Sample a random timestep for each image
-        timesteps = torch.randint(0, self.noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
+        timesteps = torch.randint(
+            0, self.noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+        )
         timesteps = timesteps.long()
 
         # Add noise to the latents according to the noise magnitude at each timestep
@@ -246,7 +389,7 @@ class StableDiffusionTrainer(nn.Module):
         noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
         # Get the embedding for conditioning
-        encoder_hidden_states = batch["input_ids"]
+        encoder_hidden_states = self.encode_text(batch)
 
         if self.noise_scheduler.config.prediction_type == "epsilon":
             target = noise
@@ -255,38 +398,19 @@ class StableDiffusionTrainer(nn.Module):
         else:
             raise ValueError(f"Unknown prediction type: {self.noise_scheduler.config.prediction_type}")
 
-        if self.settings.train_text_encoder:
-            with self.accelerator.accumulate(self.unet), self.accelerator.accumulate(self.text_encoder):
-                with self.accelerator.autocast():
-                    # Predict the noise residual
-                    noise_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        # Predict the noise residual
+        noise_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                    # is this...
-                    loss = F.mse_loss(noise_pred, target, reduction="mean")
+        # is this...
+        loss = F.mse_loss(noise_pred, target, reduction="mean")
 
-                # backprop and update
-                self.accelerator.backward(loss)
-                self.optimizer.step()
-                self.lr_scheduler.step()
-                self.optimizer.zero_grad()
-        else:
-            with self.accelerator.accumulate(self.unet):
-                with self.accelerator.autocast():
-                    # Predict the noise residual
-                    noise_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
-                    # loss?
-                    loss = F.mse_loss(noise_pred, target, reduction="mean")
-
-                # backprop and update
-                self.accelerator.backward(loss)
-                self.optimizer.step()
-                self.lr_scheduler.step()
-                self.optimizer.zero_grad()
-
-        # Update EMA
-        if self.settings.use_ema:
-            self.ema_model.step(self.unet.parameters())
+        # backprop and update
+        self.accelerator.backward(loss)
+        if self.accelerator.sync_gradients:
+            self.accelerator.clip_grad_norm_(self.unet.parameters(), self.settings.max_grad_norm)
+        self.optimizer.step()
+        self.lr_scheduler.step()
+        self.optimizer.zero_grad()
 
         return loss
 
@@ -320,3 +444,22 @@ def get_cosine_restart_scheduler_scaled(
         )
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
+def remap(x, in_min, in_max, out_min, out_max):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+def rescale(x, min_scale: float = 0.0, max_scale: float = 1.0) -> float:
+    part1 = x
+    part2 = max_scale - min_scale
+    part3 = 1.0 - 0.0
+    part4 = min_scale
+
+    an_value = part1 * part2 / part3 + part4
+    # dont need the div by 1
+    an_value = part1 * part2 + part4
+
+    an_value = (x * (max_scale - min_scale)) + min_scale
+
+    pass

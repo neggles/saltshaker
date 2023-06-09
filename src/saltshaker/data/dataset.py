@@ -1,17 +1,17 @@
+from hashlib import sha256
 from random import (
     random as rand_float,
     shuffle,
 )
-from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
-import numpy as np
 import torch
-from accelerate import DistributedType
-from accelerate.accelerator import AcceleratorState
+from accelerate import Accelerator
 from accelerate.logging import get_logger
 from datasets import Dataset as HFDataset
+from PIL import Image
 from scipy.interpolate import interp1d
-from torch.utils.data import Dataset, Sampler, get_worker_info
+from torch.utils.data import Dataset, Sampler
 from torchvision.transforms import Compose, Normalize, RandomHorizontalFlip, ToTensor
 from tqdm_loggable.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
@@ -21,36 +21,26 @@ from saltshaker.settings import AspectBucketInfo, Settings
 logger = get_logger(__name__)
 
 
-def _sort_by_ratio(bucket: tuple) -> float:
-    return bucket[0] / bucket[1]
-
-
-def _sort_by_area(bucket: tuple) -> float:
-    return bucket[0] * bucket[1]
-
-
 class AspectBucketDataset(Dataset):
     def __init__(
         self,
         dataset: HFDataset,
         tokenizer: CLIPTokenizer,
         text_encoder: CLIPTextModel,
-        device: torch.device,
+        accelerator: Accelerator,
         settings: Settings,
     ) -> None:
         super().__init__()
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
-        self.device = device
+        self.accelerator = accelerator
 
         self.image_column = settings.image_column
         self.caption_column = settings.caption_column
         self.ucg = settings.ucg
         self.extended_mode_chunks = settings.extended_mode_chunks
         self.clip_penultimate = settings.clip_penultimate
-
-        self._accel = AcceleratorState()
 
         if isinstance(self.text_encoder, torch.nn.parallel.DistributedDataParallel):
             self.text_encoder: CLIPTextModel = self.text_encoder.module
@@ -67,6 +57,14 @@ class AspectBucketDataset(Dataset):
         self.batch_size = settings.batch_size
         self.max_ratio = 2
 
+        # bucket caching
+        self._cache_dir = settings.cache_dir
+        cache_fname = f"{settings.model_name_or_path.stem}-{settings.project_name}-cache"
+        fname_hash = sha256(cache_fname.encode("utf-8")).hexdigest()[:8]
+        world_info_str = f"w{self.accelerator.num_processes}p{self.accelerator.local_process_index}"
+        self._cachefile_name = f"{cache_fname}-{fname_hash}-b{self.batch_size}-{world_info_str}.pt"
+        self._loaded_cache = False
+
         # initialize the buckets
         self.buckets = self.aspect.buckets
         self._ratios = self.aspect.ratios
@@ -80,6 +78,10 @@ class AspectBucketDataset(Dataset):
         self.total_dropped: int = 0
         self._fill_buckets()
 
+    @property
+    def device(self) -> torch.device:
+        return self.accelerator.device
+
     def __len__(self) -> int:
         return sum(len(v) for v in self.bucket_data.values())
 
@@ -92,11 +94,16 @@ class AspectBucketDataset(Dataset):
         Returns:
             A dictionary containing the image and caption.
         """
-        bucket = self.buckets[idx]
-        entry = self.bucket_data[bucket][idx]
+        if isinstance(idx, List):
+            if len(idx) == 1:
+                idx = idx[0]
+            else:
+                raise ValueError("idx must be an int or a list of length 1, for now at least")
+        image: Image.Image = self.dataset[idx][self.image_column]
+        image = image.convert("RGB")
         return {
-            "pixel_values": self.transforms(self.dataset[entry][self.image_column]),
-            "input_ids": self.dataset[entry][self.caption_column] if rand_float() > self.ucg else "",
+            "pixel_values": self.transforms(image),
+            "input_ids": self.dataset[idx][self.caption_column] if rand_float() > self.ucg else "",
         }
 
     def get_batch_count(self) -> int:
@@ -141,15 +148,35 @@ class AspectBucketDataset(Dataset):
             # yield [(idx, *b) for idx in batch]
             yield [idx for idx in batch]
 
+    def _load_cache(self):
+        cache_file = self._cache_dir.joinpath(self._cachefile_name)
+        if cache_file.exists():
+            self.bucket_data = torch.load(cache_file)
+            self._loaded_cache = True
+        return self._loaded_cache
+
+    def _save_cache(self):
+        cache_file = self._cache_dir.joinpath(self._cachefile_name)
+        if not self._loaded_cache:
+            logger.info("Saving bucket data to cache")
+            torch.save(self.bucket_data, cache_file)
+
     def _fill_buckets(self):
         """Fill the buckets with the indices of the dataset entries."""
+        self._load_cache()
+        if self._loaded_cache is True:
+            logger.info("Using cached bucket data")
+        else:
+            for entry, index in tqdm(
+                self._dimension_iterator(),
+                total=len(self.dataset),
+                ncols=100,
+                desc="Filtering buckets",
+            ):
+                if not self._process_entry(entry, index):
+                    self.total_dropped += 1
 
-        for entry, index in tqdm(
-            self._dimension_iterator(), total=len(self.dataset), ncols=100, desc="Filtering buckets"
-        ):
-            if not self._process_entry(entry, index):
-                self.total_dropped += 1
-
+        self._save_cache()
         for bucket, values in self.bucket_data.items():
             # shuffle the entries to make sure dropped elements are not always the same
             shuffle(values)
@@ -184,7 +211,7 @@ class AspectBucketDataset(Dataset):
         examples = [x for x in examples if x is not None]
 
         pixel_values = torch.stack([x["pixel_values"] for x in examples])
-        pixel_values = pixel_values.to(memory_format=torch.channels_last, dtype=torch.float32)
+        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
 
         if self.extended_mode_chunks < 2:
             max_length = self.tokenizer.model_max_length - 2
@@ -194,7 +221,7 @@ class AspectBucketDataset(Dataset):
                     truncation=True,
                     return_length=True,
                     return_overflowing_tokens=False,
-                    padding="longest",
+                    padding=False,
                     add_special_tokens=False,
                     max_length=max_length,
                 ).input_ids
@@ -220,111 +247,7 @@ class AspectBucketDataset(Dataset):
 
         tokens = input_ids
 
-        if self.extended_mode_chunks < 2:
-            for i, x in enumerate(input_ids):
-                for j, y in enumerate(x):
-                    input_ids[i][j] = [
-                        self.tokenizer.bos_token_id,
-                        *y,
-                        *np.full((self.tokenizer.model_max_length - len(y) - 1), self.tokenizer.eos_token_id),
-                    ]
-
-            if self.clip_penultimate:
-                input_ids = [
-                    self.text_encoder.text_model.final_layer_norm(
-                        self.text_encoder(torch.asarray(input_id).to(self.device), output_hidden_states=True)[
-                            "hidden_states"
-                        ][-2]
-                    )[0]
-                    for input_id in input_ids
-                ]
-            else:
-                input_ids = [
-                    self.text_encoder(
-                        torch.asarray(input_id).to(self.device), output_hidden_states=True
-                    ).last_hidden_state[0]
-                    for input_id in input_ids
-                ]
-        else:
-            max_standard_tokens = max_length - 2
-            max_chunks = self.extended_mode_chunks
-            max_len = (
-                np.ceil(max(len(x) for x in input_ids) / max_standard_tokens).astype(int).item()
-                * max_standard_tokens
-            )
-            if max_len > max_standard_tokens:
-                z = None
-                for i, x in enumerate(input_ids):
-                    if len(x) < max_len:
-                        input_ids[i] = [*x, *np.full((max_len - len(x)), self.tokenizer.eos_token_id)]
-                batch_t = torch.tensor(input_ids)
-                chunks = [
-                    batch_t[:, i : i + max_standard_tokens] for i in range(0, max_len, max_standard_tokens)
-                ]
-                for chunk in chunks:
-                    chunk = torch.cat(
-                        (
-                            torch.full((chunk.shape[0], 1), self.tokenizer.bos_token_id),
-                            chunk,
-                            torch.full((chunk.shape[0], 1), self.tokenizer.eos_token_id),
-                        ),
-                        1,
-                    )
-                    if z is None:
-                        if self.clip_penultimate:
-                            z = self.text_encoder.text_model.final_layer_norm(
-                                self.text_encoder(chunk.to(self.device), output_hidden_states=True)[
-                                    "hidden_states"
-                                ][-2]
-                            )
-                        else:
-                            z = self.text_encoder(
-                                chunk.to(self.device), output_hidden_states=True
-                            ).last_hidden_state
-                    else:
-                        if self.clip_penultimate:
-                            z = torch.cat(
-                                (
-                                    z,
-                                    self.text_encoder.text_model.final_layer_norm(
-                                        self.text_encoder(chunk.to(self.device), output_hidden_states=True)[
-                                            "hidden_states"
-                                        ][-2]
-                                    ),
-                                ),
-                                dim=-2,
-                            )
-                        else:
-                            z = torch.cat(
-                                (
-                                    z,
-                                    self.text_encoder(
-                                        chunk.to(self.device), output_hidden_states=True
-                                    ).last_hidden_state,
-                                ),
-                                dim=-2,
-                            )
-                input_ids = z
-            else:
-                for i, x in enumerate(input_ids):
-                    input_ids[i] = [
-                        self.tokenizer.bos_token_id,
-                        *x,
-                        *np.full((self.tokenizer.model_max_length - len(x) - 1), self.tokenizer.eos_token_id),
-                    ]
-                if self.clip_penultimate:
-                    input_ids = self.text_encoder.text_model.final_layer_norm(
-                        self.text_encoder(
-                            torch.asarray(input_ids).to(self.device), output_hidden_states=True
-                        )["hidden_states"][-2]
-                    )
-                else:
-                    input_ids = self.text_encoder(
-                        torch.asarray(input_ids).to(self.device), output_hidden_states=True
-                    ).last_hidden_state
-
-        input_ids = torch.stack(tuple(input_ids))
-        return {"pixel_values": pixel_values, "input_ids": input_ids, "tokens": tokens}
+        return {"pixel_values": pixel_values, "tokens": tokens}
 
 
 class AspectDatasetSampler(Sampler):
@@ -334,7 +257,7 @@ class AspectDatasetSampler(Sampler):
         self.num_replicas = num_replicas
         self.rank = rank
 
-    def __iter__(self) -> Iterator[int]:
+    def __iter__(self):
         # subsample the bucket to only include the elements that are assigned to this rank
         indices = self.dataset.get_batch_iterator()
         indices = list(indices)[self.rank :: self.num_replicas]

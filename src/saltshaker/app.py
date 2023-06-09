@@ -5,13 +5,13 @@ from typing import NoReturn, Optional
 import typer
 
 from saltshaker import __version__, console, web
-from saltshaker.finetune import main as finetune
+from saltshaker.finetune import app as finetune
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
-app.add_typer(finetune, name="finetune")
+app.add_typer(finetune, name="finetune", invoke_without_command=True)
 
 
 def version_callback(value: bool) -> None:
