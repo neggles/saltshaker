@@ -1,5 +1,6 @@
 export PYTHONUNBUFFERED='1'
 
+unset LD_PRELOAD
 unset PJRT_DEVICE
 export XRT_TPU_CONFIG='localservice;0;localhost:51011'
 export MASTER_ADDR='localhost'
@@ -8,15 +9,48 @@ export MASTER_PORT='12355'
 ## see https://github.com/pytorch/xla/issues/4914
 export XLA_IR_SHAPE_CACHE_SIZE=12288
 
+## General log level opts
+#export ACCELERATE_LOG_LEVEL='INFO'
+#export TRANSFORMERS_LOG_LEVEL='INFO'
+
 ## useful options for debug
-# export PT_XLA_DEBUG=1
-# export XLA_IR_DEBUG=0
-# export ACCELERATE_LOG_LEVEL='INFO'
-# export TRANSFORMERS_LOG_LEVEL='INFO'
-# export TF_CPP_MIN_LOG_LEVEL=0
-# export TF_CPP_LOG_THREAD_ID=1
-# export TF_CPP_VMODULE='tensor=4,computation_client=5,xrt_computation_client=5,aten_xla_type=5'
+#export PT_XLA_DEBUG=1
+# Enables the Python stack trace to be captured where creating IR nodes, hence allowing to understand which PyTorch operation was responsible for generating the IR.
+#export XLA_IR_DEBUG=1
+# Path to save the IR graphs generated during execution.
+#export XLA_SAVE_TENSORS_FILE=''
+# File type for above. can be text, dot (GraphViz), or hlo (native)
+#export XLA_SAVE_TENSORS_FMT='text'
+# Path to save metrics after every op
+#export XLA_METRICS_FILE=
+# In case of compilation/execution error, the offending HLO graph will be saved here.
+#export XLA_SAVE_HLO_FILE=
+
+# Enable OpByOp dispatch for "get tensors"
+#export XLA_GET_TENSORS_OPBYOP=1
+# Enable OpByOp dispatch for "sync tensors"
+#export XLA_SYNC_TENSORS_OPBYOP=1
+# Force XLA tensor sync before moving to next step
+#export XLA_SYNC_WAIT=1
+
+# Force downcasting of fp32 to bf16
+#export XLA_USE_BF16=1
+# Force downcasting of fp32 to fp16
+#export XLA_USE_F16=1
+# Force downcasting of fp64 to fp32
+#export XLA_USE_32BIT_LONG=1
+
+## TPU runtime / compilation debug logging
+# All XLA log messages are INFO level so this is required
+#export TF_CPP_MIN_LOG_LEVEL=0
+# Print the thread ID in log messages
+#export TF_CPP_LOG_THREAD_ID=1
+# What modules to print from at what level
+#export TF_CPP_VMODULE='tensor=4,computation_client=5,xrt_computation_client=5,aten_xla_type=5'
+
 
 ## Limit to single TPU chip/core
 # export TPU_PROCESS_BOUNDS='1,1,1'
 # export TPU_VISIBLE_CHIPS=0
+
+export HUGGINGFACE_TOKEN='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'

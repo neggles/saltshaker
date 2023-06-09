@@ -277,3 +277,6 @@ $RECYCLE.BIN/
 
 # version file
 src/saltshaker/_version.py
+
+# wandb
+/wandb/
